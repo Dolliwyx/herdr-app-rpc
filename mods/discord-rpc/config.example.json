@@ -1,0 +1,7 @@
+{
+  "clientId": "YOUR_DISCORD_APPLICATION_ID",
+  "enabled": true,
+  "privatePatterns": [],
+  "largeImageKey": "herdr",
+  "showHarnessIcon": true
+}

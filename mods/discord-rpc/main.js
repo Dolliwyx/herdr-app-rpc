@@ -1,0 +1,94 @@
+import { View, div } from "gpui-kit";
+import { agents, appHome, exec, focused, panes, readTextFile, spaces, terminals, writeTextFile } from "herdr";
+import { buildActivity, parseConfig } from "./presence.js";
+
+export default class DiscordRpc extends View {
+  init(_props, cx) {
+    // shortcut: one host per app home; add owner leases before supporting multiple windows.
+    this.directory = appHome() + "/mods/discord-rpc";
+    this.revision = 0;
+    this.writtenRevision = -1;
+    this.lastWrite = 0;
+    this.busy = false;
+    this.closing = false;
+    this.lastError = "";
+    cx.timer.every(1000, cx => this.flush(cx));
+    this.flush(cx);
+  }
+
+  report(error) {
+    const message = String(error);
+    if (message !== this.lastError) console.log("discord-rpc: " + message);
+    this.lastError = message;
+  }
+
+  async branch(data) {
+    const address = data.focus?.shown ?? data.focus?.terminal;
+    const pane = data.panes.find(p => p.terminal === address);
+    const cwd = pane?.cwd ?? data.focus?.cwd;
+    if (!address || pane?.branch || !cwd) return pane?.branch;
+    const on = address.includes("/") ? address.split("/")[0] : null;
+    const key = JSON.stringify([on, cwd]);
+    if (this.branchLookup?.key === key && Date.now() - this.branchLookup.at < 10000) return this.branchLookup.value;
+    let value = null;
+    try {
+      const result = await exec("git", ["branch", "--show-current"], { cwd, on });
+      if (result.code === 0) value = result.stdout.trim() || null;
+    } catch (error) {
+      this.report(error);
+    }
+    this.branchLookup = { key, value, at: Date.now() };
+    return value;
+  }
+
+  flush(cx) {
+    if (this.busy || this.closing || (this.revision === this.writtenRevision && Date.now() - this.lastWrite < 10000)) return;
+    this.busy = true;
+    const revision = this.revision;
+    cx.spawn(async cx => {
+      try {
+        let activity = null;
+        try {
+          const config = parseConfig(await readTextFile(this.directory + "/config.json"));
+          const data = { agents: agents(), spaces: spaces(), terminals: terminals(), panes: panes(), focus: focused() };
+          const branch = config.enabled === false ? null : await this.branch(data);
+          activity = buildActivity(data, config, branch);
+        } catch (error) {
+          this.report(error);
+        }
+        const path = this.directory + "/.presence.json";
+        const previous = await readTextFile(path);
+        if (this.closing) return;
+        await writeTextFile(path, JSON.stringify({ version: 1, updatedAt: Date.now(), activity }), previous);
+        if (this.closing) return;
+        const result = await exec("node", [this.directory + "/bridge.mjs", "--start", this.directory]);
+        if (result.code !== 0) throw new Error(result.stderr || "Could not start Discord helper");
+        this.writtenRevision = revision;
+        this.lastWrite = Date.now();
+      } catch (error) {
+        this.report(error);
+      } finally {
+        this.busy = false;
+      }
+    });
+  }
+
+  async close() {
+    this.closing = true;
+    const path = this.directory + "/.presence.json";
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const previous = await readTextFile(path);
+        await writeTextFile(path, JSON.stringify({ version: 1, updatedAt: Date.now(), activity: null }), previous);
+        return;
+      } catch (error) {
+        if (attempt === 2) this.report(error);
+      }
+    }
+  }
+
+  render() {
+    this.revision++;
+    return div().w(0).h(0);
+  }
+}

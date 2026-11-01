@@ -1,0 +1,5 @@
+node_modules/
+.pi/
+mods/discord-rpc/config.json
+mods/discord-rpc/.*.json
+mods/discord-rpc/.status-*.tmp
