@@ -29,11 +29,13 @@ No npm packages, bot token, user token, web server, or scheduled task are needed
 
 ## Configuration
 
-Copy `config.example.json` to the installed mod's `config.json`, then enter your Discord application ID. The local config and runtime state are ignored by Git.
+Copy `config.example.json` to the installed mod's `config.json`. It already uses the shared Herdr Discord application. The local config and runtime state are ignored by Git.
+
+> **Application ID:** Leave `clientId` unchanged unless you know what you're doing and want to use your own Discord application. If you change it, that application's image assets must match this configuration. The application ID is public—not a secret or a token.
 
 ```json
 {
-  "clientId": "YOUR_DISCORD_APPLICATION_ID",
+  "clientId": "1529832902387302510",
   "enabled": true,
   "privatePatterns": ["client-*", "Personal"],
   "largeImageKey": "herdr",
