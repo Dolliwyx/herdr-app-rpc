@@ -57,6 +57,8 @@ If your layout includes the optional launcher, click its **Discord logo** (toolt
 herdr-app do mod.open --name discord-rpc
 ```
 
+Use **Create RPC pane** in settings to restore a removed host as a zero-width pane beside the currently focused pane. If an RPC pane already exists, **Go to RPC pane** selects it instead of creating a duplicate. This action does not save or discard your settings draft.
+
 The dialog is separate from the host pane: opening or closing settings does not start another helper or clear presence. **Save** applies your draft together; **Cancel** discards it. Turning sharing **off pauses immediately**, even if you later cancel. Turning it back on requires Save. Reload discards draft edits and rereads the file. Saves are atomic and refuse to overwrite a configuration changed elsewhere; Reload after a conflict. Missing configuration starts with the shared application defaults; malformed configuration must be fixed in the file before editing.
 
 The preview shows draft text for the current workspace, including privacy changes, independently of whether sharing is paused. Connection status and the last Discord acknowledgment are labeled separately. Artwork uses the local Herdr image as a reference for the shared application's default `herdr` key; asset-key labels identify the configured images, not a fetched Discord rendering.

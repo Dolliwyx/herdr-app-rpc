@@ -1,6 +1,6 @@
 import { View, div, image } from "gpui-kit";
 import { Button, Checkbox, Input, InputState, h_flex, v_flex } from "gpui-base";
-import { agents, appHome, closeOverlay, focused, panes, props, readTextFile, spaces, terminals, theme, writeTextFile } from "herdr";
+import { agents, appHome, closeOverlay, exec, focused, panes, props, readTextFile, run, spaces, terminals, theme, writeTextFile } from "herdr";
 import { buildActivity, DEFAULT_DETAILS, DEFAULT_STATE, isPrivate, parseConfig, VARIABLES } from "./presence.js";
 
 const DEFAULT_CONFIG = { clientId: "1529832902387302510", enabled: true, privatePatterns: [], largeImageKey: "herdr", showHarnessIcon: true };
@@ -92,6 +92,48 @@ export default class Settings extends View {
         this.previewData = { agents: agents(), spaces: spaces(), terminals: terminals(), panes: panes(), focus: this.focus };
         this.branchFallback = this.lookupBranch ? await this.lookupBranch(this.previewData).catch(() => null) : null;
         this.readingStatus = false;
+        cx.notify();
+      }
+    });
+  }
+
+  createPane(cx) {
+    if (this.creatingPane || this.saving || this.loading) return;
+    const existing = panes().find(pane => pane.mod === "discord-rpc");
+    if (existing) {
+      run("pane.focus", { pane: existing.pane });
+      this.error = "";
+      this.notice = "Existing RPC pane selected. No new pane was created.";
+      cx.notify();
+      return;
+    }
+    const anchor = focused()?.pane;
+    if (!anchor) {
+      this.error = "Select a pane in a workspace tab, then create the RPC pane.";
+      cx.notify();
+      return;
+    }
+    this.creatingPane = true;
+    this.error = "";
+    this.notice = "";
+    cx.notify();
+    cx.spawn(async cx => {
+      let created = false;
+      try {
+        const result = await exec("herdr-app", ["do", "pane.split", JSON.stringify({ direction: "right", pane: anchor, mod: "discord-rpc", props: { presenceHost: true } })]);
+        if (result.code !== 0) throw new Error(result.stderr || "Herdr could not create the pane");
+        const { pane } = JSON.parse(result.stdout);
+        if (typeof pane !== "string" || !pane) throw new Error("Herdr did not return the new pane ID");
+        created = true;
+        const resized = await exec("herdr-app", ["do", "layout.resize", JSON.stringify({ id: pane, px: 0 })]);
+        if (resized.code !== 0) throw new Error(resized.stderr || "Herdr could not resize the pane");
+        this.notice = "Invisible RPC pane created. Keep its tab; visit it once after reopening Herdr.";
+      } catch (error) {
+        this.error = `${created ? "RPC pane created, but could not make it invisible" : "Could not create RPC pane"}: ${String(error)}`;
+      } finally {
+        if (created) run("pane.focus", { pane: anchor });
+        this.creatingPane = false;
+        this.refreshStatus(cx);
         cx.notify();
       }
     });
@@ -207,7 +249,8 @@ export default class Settings extends View {
 
   render() {
     const t = theme();
-    const busy = Boolean(this.saving || this.loading);
+    const busy = Boolean(this.saving || this.loading || this.creatingPane);
+    const paneExists = panes().some(pane => pane.mod === "discord-rpc");
     let config, error, preview;
     if (this.loaded) {
       try {
@@ -223,7 +266,8 @@ export default class Settings extends View {
       .child(h_flex().gap(10).items_center()
         .child(div().flex_1().text_size(16).font_semibold().child("Discord presence"))
         .child(this.button(t, "close", "Close", () => { if (props()?.overlay) closeOverlay(props().overlay); }, false, busy)))
-      .child(this.note(t, status));
+      .child(this.note(t, status))
+      .child(div().pt(8).child(this.button(t, "create-rpc-pane", this.creatingPane ? "Creating pane…" : paneExists ? "Go to RPC pane" : "Create RPC pane", cx => this.createPane(cx), false, busy)));
     if (this.loading) return root.child(this.note(t, "Loading configuration…"));
     if (!this.loaded) return root.child(this.note(t, this.error)).child(this.button(t, "reload", "Reload", cx => this.load(cx)));
     const content = v_flex().id("discord-settings-scroll").min_h(0).flex_1().overflow_y_scrollbar().gap(8)

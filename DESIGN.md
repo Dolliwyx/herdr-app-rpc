@@ -10,7 +10,7 @@ A Discord-logo-only button in a 40px block in the custom layout's bottom-right s
 
 ## Hierarchy and behavior
 
-1. Title, connection status, and sharing toggle.
+1. Title, connection status, a Create RPC pane recovery button (Go to RPC pane when one exists), and sharing toggle. Pane recovery preserves the settings draft and uses the existing native button style.
 2. Draft preview: compact member-list status and expanded activity text; distinguish it from Discord-acknowledged activity. Local artwork is a reference, not a remote rendering.
 3. Presence text: member-list display selection, Details and State templates, insertion buttons targeting the last focused field, and Reset text.
 4. Workspace privacy rules, then appearance preferences.

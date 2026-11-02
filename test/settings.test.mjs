@@ -9,7 +9,7 @@ const source = (await readFile(new URL("../mods/discord-rpc/settings.js", import
 const initial = { clientId: "1529832902387302510", enabled: true, privatePatterns: [], largeImageKey: "herdr", customSetting: "preserve" };
 const plain = value => JSON.parse(JSON.stringify(value));
 
-function runtime(value = initial) {
+function runtime(value = initial, overrides = {}) {
   const tasks = [], writes = [], elements = new Map();
   let disk = value === null ? null : typeof value === "string" ? value : JSON.stringify(value);
   let closed = 0;
@@ -64,6 +64,9 @@ function runtime(value = initial) {
       disk = next;
     },
     buildActivity, DEFAULT_DETAILS, DEFAULT_STATE, isPrivate, parseConfig, VARIABLES,
+    exec: () => assert.fail("settings must not launch commands without a pane action"),
+    run: () => assert.fail("settings must not run commands without a pane action"),
+    ...overrides,
   });
   const settings = new Class();
   const drain = async () => { for (let i = 0; i < tasks.length; i++) await tasks[i]; };
@@ -96,6 +99,89 @@ test("stopped status points to the RPC pane and its tab", async () => {
   assert.match(rendered, /Visit its tab/);
   assert.doesNotMatch(rendered, /RPC layout/);
 });
+
+test("pane recovery creates a zero-width explicit host without saving or discarding drafts", async () => {
+  const commands = [], focus = [];
+  const r = runtime(initial, {
+    focused: () => ({ space: "s", pane: "original" }),
+    exec: async (program, args) => {
+      commands.push([program, args[1], JSON.parse(args[2])]);
+      return { code: 0, stdout: JSON.stringify(args[1] === "pane.split" ? { pane: "new-rpc" } : { ok: true }) };
+    },
+    run: (...args) => focus.push(plain(args)),
+  });
+  r.settings.init({}, r.cx);
+  await r.drain();
+  r.settings.inputs.stateTemplate.set_value("Unsaved {workspace}");
+  r.settings.render();
+  r.elements.get("create-rpc-pane").click({}, r.cx);
+  r.settings.createPane(r.cx);
+  assert.equal(r.settings.creatingPane, true);
+  r.settings.render();
+  assert.equal(r.elements.get("create-rpc-pane").isDisabled, true);
+  await r.drain();
+  assert.deepEqual(commands, [
+    ["herdr-app", "pane.split", { direction: "right", pane: "original", mod: "discord-rpc", props: { presenceHost: true } }],
+    ["herdr-app", "layout.resize", { id: "new-rpc", px: 0 }],
+  ]);
+  assert.deepEqual(focus, [["pane.focus", { pane: "original" }]]);
+  assert.equal(r.settings.inputs.stateTemplate.value(), "Unsaved {workspace}");
+  assert.equal(r.writes.length, 0);
+  assert.equal(r.closed, 0);
+  assert.equal(r.settings.creatingPane, false);
+  assert.match(r.settings.notice, /Invisible RPC pane created/);
+});
+
+test("pane recovery reuses an existing pane even when its heartbeat is stale", async () => {
+  const commands = [];
+  const r = runtime(initial, {
+    panes: () => [{ mod: "discord-rpc", pane: "existing" }],
+    run: (...args) => commands.push(plain(args)),
+  });
+  r.settings.init({}, r.cx);
+  await r.drain();
+  assert.equal(r.settings.hostLive, false);
+  r.settings.render();
+  assert.deepEqual(r.elements.get("create-rpc-pane").nodeChildren, ["Go to RPC pane"]);
+  r.elements.get("create-rpc-pane").click({}, r.cx);
+  assert.deepEqual(commands, [["pane.focus", { pane: "existing" }]]);
+  assert.equal(r.writes.length, 0);
+  assert.match(r.settings.notice, /No new pane/);
+});
+
+test("pane recovery requires a tab pane instead of splitting an unrelated terminal", async () => {
+  const r = runtime();
+  r.settings.init({}, r.cx);
+  await r.drain();
+  r.settings.createPane(r.cx);
+  assert.match(r.settings.error, /Select a pane/);
+  assert.equal(r.writes.length, 0);
+});
+
+for (const failure of ["split", "resize", "response"]) {
+  test(`pane recovery reports ${failure} failure without saving settings`, async () => {
+    const commands = [];
+    const r = runtime(initial, {
+      focused: () => ({ space: "s", pane: "original" }),
+      exec: async (_program, args) => {
+        commands.push(args[1]);
+        if (failure === "split" || failure === "resize" && args[1] === "layout.resize") return { code: 1, stderr: "Operation rejected" };
+        return { code: 0, stdout: failure === "response" ? "{}" : '{"pane":"new-rpc"}' };
+      },
+      run: () => {},
+    });
+    r.settings.init({}, r.cx);
+    await r.drain();
+    r.settings.createPane(r.cx);
+    await r.drain();
+    assert.match(r.settings.error, failure === "response" ? /new pane ID/ : /Operation rejected/);
+    if (failure === "resize") assert.match(r.settings.error, /RPC pane created/);
+    assert.equal(commands.length, failure === "resize" ? 2 : 1);
+    assert.equal(r.settings.creatingPane, false);
+    assert.equal(r.closed, 0);
+    assert.equal(r.writes.length, 0);
+  });
+}
 
 test("pause persists immediately without saving draft edits, and Cancel cannot resume it", async () => {
   const r = runtime();
