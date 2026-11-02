@@ -152,6 +152,23 @@ test('updates coalesce to the newest snapshot and unchanged activity does not re
   assert.equal(f.commands.length, 2);
 });
 
+test('forwards status display selection through SET_ACTIVITY and rejects invalid enums', async (t) => {
+  const f = await fixture(t);
+  await waitFor(async () => (await f.status()).state === 'published');
+  for (const status_display_type of [0, 1, 2]) {
+    await f.snapshot({ ...activity(), status_display_type });
+    await waitFor(async () => (await f.status()).activity?.status_display_type === status_display_type, 'display selection ACK');
+    assert.equal(f.commands.at(-1).args.activity.status_display_type, status_display_type);
+  }
+  for (const status_display_type of [3, '1', null]) {
+    await f.snapshot({ ...activity(), status_display_type });
+    await waitFor(async () => (await f.status()).state === 'error' && (await f.status()).activity === null, 'invalid display type clear');
+    assert.match((await f.status()).error, /Invalid activity status_display_type/);
+    await f.snapshot({ ...activity(), status_display_type: 2 });
+    await waitFor(async () => (await f.status()).state === 'published' && (await f.status()).activity?.status_display_type === 2, 'valid display type recovery');
+  }
+});
+
 test('text limits count Unicode codepoints, including emoji labels', async (t) => {
   const f = await fixture(t, { publishMs: 10 });
   await waitFor(async () => (await f.status()).state === 'published');

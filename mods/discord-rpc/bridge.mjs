@@ -137,6 +137,10 @@ function validateActivity(activity) {
       result[key] = activity[key];
     }
   }
+  if (activity.status_display_type !== undefined) {
+    if (![0, 1, 2].includes(activity.status_display_type)) throw new Error('Invalid activity status_display_type');
+    result.status_display_type = activity.status_display_type;
+  }
   if (activity.assets !== undefined) {
     result.assets = {};
     for (const key of ['large_image', 'large_text', 'small_image', 'small_text']) {

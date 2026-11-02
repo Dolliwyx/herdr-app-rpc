@@ -3,5 +3,8 @@
   "enabled": true,
   "privatePatterns": [],
   "largeImageKey": "herdr",
-  "showHarnessIcon": true
+  "showHarnessIcon": true,
+  "detailsTemplate": "{workspace} · {branch}",
+  "stateTemplate": "{harness} · {agents.running}/{agents.total} agents active",
+  "statusDisplayType": "name"
 }

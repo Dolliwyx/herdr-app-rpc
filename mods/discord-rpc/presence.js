@@ -13,6 +13,38 @@ const HARNESSES = {
 
 const text = (value, limit = 128) => Array.from(String(value ?? "").replace(/[\u0000-\u001f\u007f]/g, " ").trim()).slice(0, limit).join("");
 
+export const DEFAULT_DETAILS = "{workspace} · {branch}";
+export const DEFAULT_STATE = "{harness} · {agents.running}/{agents.total} agents active";
+export const VARIABLES = {
+  workspace: "Workspace",
+  branch: "Branch",
+  harness: "Harness",
+  "agents.running": "Running agents",
+  "agents.total": "Total agents",
+};
+
+export function validateTemplate(template) {
+  if (typeof template !== "string" || template.length > 512)
+    throw new Error("Presence templates must be text, up to 512 characters");
+  const remainder = template.replace(/\{([^{}]+)\}/g, (_match, key) => {
+    if (!Object.hasOwn(VARIABLES, key)) throw new Error(`Unknown variable: {${key}}`);
+    return "";
+  });
+  if (/[{}]/.test(remainder)) throw new Error("Use complete variables, for example {workspace}");
+}
+
+export function renderTemplate(template, values) {
+  validateTemplate(template);
+  const parts = template.split(/(\{[^{}]+\})/g);
+  for (let i = 1; i < parts.length; i += 2) {
+    if (String(values[parts[i].slice(1, -1)] ?? "")) continue;
+    // Remove only template punctuation, never punctuation inside a variable's value.
+    if (/[·|,:;/–—-]\s*$/.test(parts[i - 1])) parts[i - 1] = parts[i - 1].replace(/[\s·|,:;/–—-]+$/, "");
+    else parts[i + 1] = parts[i + 1].replace(/^[\s·|,:;/–—-]+/, "");
+  }
+  return text(parts.map((part, i) => i % 2 ? values[part.slice(1, -1)] ?? "" : part).join(""));
+}
+
 export function parseConfig(source) {
   const config = JSON.parse(source);
   if (!config || !/^\d{17,20}$/.test(config.clientId) || typeof config.clientId !== "string")
@@ -25,10 +57,15 @@ export function parseConfig(source) {
     throw new Error("config.json largeImageKey must be a nonempty asset key (up to 128 characters)");
   if (config.showHarnessIcon !== undefined && typeof config.showHarnessIcon !== "boolean")
     throw new Error("config.json showHarnessIcon must be true or false");
+  for (const key of ["detailsTemplate", "stateTemplate"]) {
+    if (config[key] !== undefined) validateTemplate(config[key]);
+  }
+  if (config.statusDisplayType !== undefined && !["name", "state", "details"].includes(config.statusDisplayType))
+    throw new Error("config.json statusDisplayType must be name, state, or details");
   return config;
 }
 
-function isPrivate(name, patterns) {
+export function isPrivate(name, patterns) {
   return patterns.some(pattern => {
     const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".");
     return new RegExp(`^${escaped}$`, "i").test(name);
@@ -76,6 +113,24 @@ export function buildActivity(data, config, branchFallback) {
     details,
     state: label ? `${text(label, 125 - count.length)} · ${count}` : count,
   };
+  const values = {
+    workspace: privateSpace ? "Private workspace" : text(space.name) || "Workspace",
+    branch: branchLabel,
+    harness: text(label),
+    "agents.running": working,
+    "agents.total": roots.length,
+  };
+  for (const [field, fallback] of [["details", DEFAULT_DETAILS], ["state", DEFAULT_STATE]]) {
+    const template = config[field + "Template"];
+    if (template === undefined || template === fallback) continue;
+    const rendered = renderTemplate(template, values);
+    if (!rendered) delete activity[field];
+    else activity[field] = Array.from(rendered).length < 2 ? `In ${rendered}` : rendered;
+  }
+  if (config.statusDisplayType !== undefined) {
+    const selected = config.statusDisplayType;
+    activity.status_display_type = selected !== "name" && !activity[selected] ? 0 : ["name", "state", "details"].indexOf(selected);
+  }
   if (config.largeImageKey) {
     activity.assets = { large_image: config.largeImageKey, large_text: "Herdr" };
     const icons = [...new Set(harnesses.map(h => h.icon))];
