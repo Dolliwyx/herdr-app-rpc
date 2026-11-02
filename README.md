@@ -100,7 +100,7 @@ The installer only copies mod/helper files, preserves existing `config.json`, an
 
 The `pane.split` command adds a host beside the focused pane in the current tab without replacing its terminals. **Create only one host pane per app home.** Multiple host panes/windows writing the same snapshot are unsupported. No layout definitions need editing. Settings and its optional global shortcut/launcher are separate from the host.
 
-For an invisible host, resize the new RPC pane to zero width after it has initialized. Use its pane ID, not the original terminal’s ID:
+For an invisible host, press **Collapse to 0px** on the RPC pane after it has initialized. Use the same button if you accidentally expand it again; presence keeps running. Alternatively, resize it with its pane ID, not the original terminal’s ID:
 
 ```powershell
 herdr-app do layout.resize '{"id":"<RPC_PANE_ID>","px":0}'

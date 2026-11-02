@@ -124,6 +124,25 @@ export default class DiscordRpc extends View {
       .child(div().text_size(16).font_semibold().child("Discord presence"))
       .child("Keep this pane open. Presence continues when you change tabs or layouts.")
       .child("After reopening Herdr, visit this tab once to start presence.")
+      .when(Boolean(this.collapseError), el => el.child(div().text_color(t.blocked).child(this.collapseError)))
+      .child(Button.new("discord-pane-collapse").tab_index(0).accessibility_label("Collapse RPC pane to 0px")
+        .px(12).h(30).rounded(6).bg(t.raised).text_color(t.foreground).cursor_pointer()
+        .hover(el => el.bg(t.hover)).focus(el => el.border_1().border_color(t.accent))
+        .on_click((_event, cx) => {
+          const pane = panes().find(pane => pane.mod === "discord-rpc")?.pane;
+          cx.spawn(async cx => {
+            try {
+              if (!pane) throw new Error("RPC pane not found");
+              const result = await exec("herdr-app", ["do", "layout.resize", JSON.stringify({ id: pane, px: 0 })]);
+              if (result.code !== 0) throw new Error(result.stderr || "Herdr could not resize the pane");
+              this.collapseError = "";
+            } catch (error) {
+              this.collapseError = `Could not collapse RPC pane: ${String(error)}`;
+            }
+            cx.notify();
+          });
+        })
+        .child("Collapse to 0px"))
       .when(Boolean(this.lastError), el => el.child(div().text_color(t.blocked).child(this.lastError)))
       .child(Button.new("discord-pane-settings").tab_index(0).accessibility_label("Discord presence settings")
         .px(12).h(30).rounded(6).bg(t.raised).text_color(t.foreground).cursor_pointer()

@@ -26,7 +26,7 @@ function runtime(overrides = {}) {
     buildActivity, parseConfig,
     ...overrides,
   });
-  const cx = { timer: { every(...args) { timers.push(args); } }, spawn(body) { const task = body(cx); tasks.push(task); return task; } };
+  const cx = { notify() {}, timer: { every(...args) { timers.push(args); } }, spawn(body) { const task = body(cx); tasks.push(task); return task; } };
   return { mod: new Class(), cx, writes, tasks, calls, timers, empty: element,
     tick: () => timers[0][1](cx), advance: ms => { now += ms; } };
 }
@@ -168,6 +168,44 @@ test("the visible launcher opens settings without publishing or clearing presenc
   assert.equal(r.tasks.length, 0);
   assert.equal(r.timers.length, 0);
 });
+
+for (const failure of [null, "missing", "rejected", "exception"]) {
+  test(`host collapse button resizes only the RPC pane (${failure ?? "success"})`, async () => {
+    const buttons = new Map();
+    const r = runtime({
+      panes: () => [{ pane: "terminal" }, ...(failure === "missing" ? [] : [{ pane: "rpc", mod: "discord-rpc" }])],
+      focused: () => ({ pane: "terminal" }),
+      Button: { new: id => {
+        const state = {};
+        const button = new Proxy({}, { get: (_target, key) => (...args) => {
+          state[key] = args[0];
+          return button;
+        } });
+        buttons.set(id, state);
+        return button;
+      } },
+      exec: async (command, args) => {
+        assert.equal(command, "herdr-app");
+        assert.deepEqual(Array.from(args).slice(0, 2), ["do", "layout.resize"]);
+        assert.deepEqual(JSON.parse(args[2]), { id: "rpc", px: 0 });
+        if (failure === "exception") throw new Error("Transport failed");
+        return { code: failure === "rejected" ? 1 : 0, stderr: "Resize rejected" };
+      },
+    });
+    r.mod.host = true;
+    r.mod.render();
+    const button = buttons.get("discord-pane-collapse");
+    assert.equal(button.child, "Collapse to 0px");
+    assert.equal(button.accessibility_label, "Collapse RPC pane to 0px");
+    assert.equal(button.tab_index, 0);
+    button.on_click({}, r.cx);
+    await Promise.all(r.tasks);
+    assert.equal(Boolean(r.mod.collapseError), Boolean(failure));
+    if (failure) assert.match(r.mod.collapseError, /Could not collapse RPC pane/);
+    assert.equal(r.mod.closing, undefined, "collapsing does not close the presence host");
+    assert.equal(r.writes.length, 0);
+  });
+}
 
 test("closing a pane clears once and stops subsequent timer writes", async () => {
   const r = runtime();
