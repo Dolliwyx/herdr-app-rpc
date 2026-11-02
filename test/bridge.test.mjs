@@ -26,8 +26,12 @@ async function waitFor(predicate, message = 'condition', timeout = 1500) {
 }
 
 async function fixture(t, options = {}, handleCommand) {
-  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'rpc-test-'));
-  const socketPath = testSocket(directory, 'discord');
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'rpc-test-'));
+  const directory = path.join(root, 'mods/discord-rpc');
+  const runtimeDirectory = path.join(root, 'data/discord-rpc');
+  await fs.mkdir(directory, { recursive: true });
+  await fs.mkdir(runtimeDirectory, { recursive: true });
+  const socketPath = testSocket(root, 'discord');
   const sockets = new Set();
   const commands = [];
   const handshakes = [];
@@ -38,12 +42,12 @@ async function fixture(t, options = {}, handleCommand) {
     await fs.rename(temporary, path.join(directory, 'config.json'));
   };
   const snapshot = async (value, updatedAt = Date.now()) => {
-    const temporary = path.join(directory, '.presence-next.json');
+    const temporary = path.join(runtimeDirectory, '.presence-next.json');
     await fs.writeFile(temporary, JSON.stringify({ version: 1, updatedAt, activity: value }));
-    await fs.rename(temporary, path.join(directory, '.presence.json'));
+    await fs.rename(temporary, path.join(runtimeDirectory, '.presence.json'));
   };
   const status = async () => {
-    try { return JSON.parse(await fs.readFile(path.join(directory, '.status.json'), 'utf8')); }
+    try { return JSON.parse(await fs.readFile(path.join(runtimeDirectory, '.status.json'), 'utf8')); }
     catch (error) { if (error.code === 'ENOENT') return {}; throw error; }
   };
   const server = net.createServer((socket) => {
@@ -80,9 +84,9 @@ async function fixture(t, options = {}, handleCommand) {
     await bridge.stop();
     for (const socket of sockets) socket.destroy();
     await new Promise((resolve) => server.close(resolve));
-    await fs.rm(directory, { recursive: true, force: true });
+    await fs.rm(root, { recursive: true, force: true });
   });
-  return { directory, bridge, commands, handshakes, pongs, sockets, config, snapshot, status, socketPath };
+  return { directory, runtimeDirectory, bridge, commands, handshakes, pongs, sockets, config, snapshot, status, socketPath };
 }
 
 test('framing handles split headers/bodies, combined frames, and oversized input', () => {
@@ -101,7 +105,8 @@ test('framing handles split headers/bodies, combined frames, and oversized input
 
 test('handshakes, responds to PING, publishes only after ACK, and keeps READY profile out of status', async (t) => {
   let acknowledgment;
-  const f = await fixture(t, {}, (payload, socket) => {
+  // This test holds the ACK across filesystem assertions; allow Windows scheduling headroom.
+  const f = await fixture(t, { timeoutMs: 1000 }, (payload, socket) => {
     if (payload.args.activity === null) return;
     acknowledgment = () => socket.write(frame(1, { cmd: 'SET_ACTIVITY', nonce: payload.nonce, data: payload.args.activity }));
     return false;
@@ -171,7 +176,7 @@ test('invalid activity names fail closed instead of bypassing field validation',
 test('malformed snapshot fails closed, clears, and leaves a useful error', async (t) => {
   const f = await fixture(t, { publishMs: 10 });
   await waitFor(async () => (await f.status()).state === 'published');
-  await fs.writeFile(path.join(f.directory, '.presence.json'), '{');
+  await fs.writeFile(path.join(f.runtimeDirectory, '.presence.json'), '{');
   await waitFor(async () => (await f.status()).state === 'error' && (await f.status()).activity === null, 'invalid snapshot clear');
   assert.equal(f.commands.at(-1).args.activity, null);
   assert.match((await f.status()).error, /Invalid \.presence.json/);
@@ -245,14 +250,18 @@ test('future heartbeat clears and exits', async (t) => {
 });
 
 test('--start returns promptly and duplicate launches retain one helper', async (t) => {
-  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'rpc-singleton-'));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'rpc-singleton-'));
+  const directory = path.join(root, 'mods/discord-rpc');
+  const runtimeDirectory = path.join(root, 'data/discord-rpc');
+  await fs.mkdir(directory, { recursive: true });
+  await fs.mkdir(runtimeDirectory, { recursive: true });
   let pid;
   t.after(async () => {
     if (pid) {
-      await fs.writeFile(path.join(directory, '.presence.json'), JSON.stringify({ version: 1, updatedAt: 1, activity: null }));
+      await fs.writeFile(path.join(runtimeDirectory, '.presence.json'), JSON.stringify({ version: 1, updatedAt: 1, activity: null }));
       try {
         await waitFor(async () => {
-          try { return JSON.parse(await fs.readFile(path.join(directory, '.status.json'), 'utf8')).state === 'stale'; }
+          try { return JSON.parse(await fs.readFile(path.join(runtimeDirectory, '.status.json'), 'utf8')).state === 'stale'; }
           catch { return false; }
         }, 'helper lease cleanup', 3000);
       } catch (error) {
@@ -260,19 +269,19 @@ test('--start returns promptly and duplicate launches retain one helper', async 
         throw error;
       }
     }
-    await fs.rm(directory, { recursive: true, force: true });
+    await fs.rm(root, { recursive: true, force: true });
   });
   await fs.writeFile(path.join(directory, 'config.json'), JSON.stringify({ clientId: CLIENT_ID, enabled: false }));
-  await fs.writeFile(path.join(directory, '.presence.json'), JSON.stringify({ version: 1, updatedAt: Date.now(), activity: null }));
+  await fs.writeFile(path.join(runtimeDirectory, '.presence.json'), JSON.stringify({ version: 1, updatedAt: Date.now(), activity: null }));
   const executable = fileURLToPath(new URL('../mods/discord-rpc/bridge.mjs', import.meta.url));
   const launch = () => promisify(execFile)(process.execPath, [executable, '--start', directory], { timeout: 6000 });
   await launch();
   await waitFor(async () => {
-    try { const status = JSON.parse(await fs.readFile(path.join(directory, '.status.json'), 'utf8')); pid = status.pid; return status.state === 'paused'; }
+    try { const status = JSON.parse(await fs.readFile(path.join(runtimeDirectory, '.status.json'), 'utf8')); pid = status.pid; return status.state === 'paused'; }
     catch { return false; }
   }, 'singleton status', 3000);
   await Promise.all(Array.from({ length: 5 }, launch));
-  const status = JSON.parse(await fs.readFile(path.join(directory, '.status.json'), 'utf8'));
+  const status = JSON.parse(await fs.readFile(path.join(runtimeDirectory, '.status.json'), 'utf8'));
   assert.equal(status.pid, pid);
   assert.equal(status.state, 'paused');
   assert.notEqual(pid, process.pid);

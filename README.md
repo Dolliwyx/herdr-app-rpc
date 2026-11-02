@@ -20,10 +20,12 @@ Pi · 1/4 agents active
 
 `bridge.mjs` maintains the Discord named-pipe connection, handshakes using your application ID, and sends `SET_ACTIVITY`. It reconnects after Discord restarts and limits non-null updates to one every 15 seconds. Pausing clears immediately. If Herdr stops refreshing the heartbeat for 45 seconds, it clears presence and exits.
 
-The hidden runtime files do **not** trigger Herdr mod hot reloads:
+All mutable runtime files (including atomic temporary files) live in `<appHome>/data/discord-rpc/`, outside the watched `mods/` tree. Hidden files inside a mod can still trigger hot reloads through native parent-directory notifications. Mod source and `config.json` remain in `<appHome>/mods/discord-rpc/`:
 
 - `.presence.json`: sanitized desired activity and heartbeat.
 - `.status.json`: helper PID, connection/error state, and last acknowledged activity. `published` means Discord acknowledged `SET_ACTIVITY`, not that its profile UI was visually inspected.
+
+When upgrading from mod-local runtime files, keep the same mod directory: its singleton identity prevents a competing helper. Once the new host stops refreshing the old snapshot, the old helper clears and exits within 45 seconds (plus an in-flight clear timeout). The new host retries startup every ten seconds. Old `.presence.json` and `.status.json` files under `mods/discord-rpc/` are inert after that; do not use them to check the new helper. An already-failed Herdr runtime may need a window-only restart to load the fix.
 
 No npm packages, bot token, user token, web server, or scheduled task are needed. The activity explicitly displays the name **Herdr**. The application ID still selects your Discord application, and the art keys must exist in that registration.
 
@@ -82,4 +84,4 @@ To remove it, switch back to `main`, then remove the personal `main-rpc` layout 
 npm test
 ```
 
-Run the same tests with Windows Node before installation. Also run `herdr-app check` and inspect `herdr-app status` for errors. In the running app, check `.status.json` for an acknowledged activity; switch pane/workspace, change an agent's status, and verify the sanitized `.presence.json` follows. Test pause/resume and layout removal to verify clearing. A named-pipe connection alone is not an end-to-end presence test.
+Run the same tests with Windows Node before installation. Also run `herdr-app check` and inspect `herdr-app status` for errors. In the running app, check `<appHome>/data/discord-rpc/.status.json` for an acknowledged activity; switch pane/workspace, change an agent's status, and verify the sanitized `<appHome>/data/discord-rpc/.presence.json` follows. Test pause/resume and layout removal to verify clearing. A named-pipe connection alone is not an end-to-end presence test.
