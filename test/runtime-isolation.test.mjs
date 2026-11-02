@@ -26,7 +26,7 @@ test('heartbeat, close, bridge status and temporary writes stay outside watched 
   const tasks = [];
   const Class = vm.runInNewContext(source, {
     View: class {}, console, appHome: () => home,
-    agents: () => [], spaces: () => [], terminals: () => [], panes: () => [], focused: () => null,
+    agents: () => [], spaces: () => [], terminals: () => [], panes: () => [], focused: () => null, props: () => null,
     buildActivity, parseConfig,
     readTextFile: async file => fs.readFile(file, 'utf8').catch(error => { if (error.code === 'ENOENT') return null; throw error; }),
     writeTextFile: async (file, text) => {

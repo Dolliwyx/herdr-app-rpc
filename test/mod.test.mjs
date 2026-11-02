@@ -18,7 +18,7 @@ function runtime(overrides = {}) {
     div: () => ({ w() { return this; }, h() { return this; } }),
     console: { log() {} },
     appHome: () => "/app",
-    agents: () => [], spaces: () => [], terminals: () => [], panes: () => [], focused: () => null,
+    agents: () => [], spaces: () => [], terminals: () => [], panes: () => [], focused: () => null, props: () => null,
     readTextFile: async path => path.endsWith("/config.json") ? config : null,
     writeTextFile: async (...args) => writes.push(args),
     exec: async (...args) => { calls.push(args); return { code: 0 }; },
@@ -65,6 +65,58 @@ test("invalid privacy configuration writes null rather than retaining old presen
   r.mod.init({}, r.cx);
   await Promise.all(r.tasks);
   assert.equal(JSON.parse(r.writes[0][1]).activity, null);
+});
+
+test("opening and closing settings never starts or clears a second presence host", async () => {
+  const calls = [];
+  const r = runtime({
+    props: () => ({ overlay: "settings" }),
+    Settings: class {
+      init(_props, _cx, branch) { calls.push("init"); assert.equal(typeof branch, "function"); }
+      render() { calls.push("render"); return "settings"; }
+    },
+  });
+  r.mod.init({}, r.cx);
+  assert.equal(r.mod.render(), "settings");
+  await r.mod.close();
+  assert.deepEqual(calls, ["init", "render"]);
+  assert.equal(r.writes.length, 0);
+  assert.equal(r.calls.length, 0);
+  assert.equal(r.tasks.length, 0);
+});
+
+test("the visible launcher opens settings without publishing or clearing presence", async () => {
+  let click;
+  const overlays = [], children = [];
+  let button, icon, tooltip, accessibleName;
+  button = new Proxy({}, { get(_target, key) {
+    return (...args) => {
+      if (key === "on_click") click = args[0];
+      if (key === "child") children.push(args[0]);
+      if (key === "tooltip") tooltip = args[0];
+      if (key === "accessibility_label") accessibleName = args[0];
+      return button;
+    };
+  } });
+  const r = runtime({
+    props: () => ({ launcher: true }),
+    Button: { new: () => button },
+    svg: path => { icon = path; return button; },
+    theme: () => ({}),
+    openOverlay: spec => overlays.push(JSON.parse(JSON.stringify(spec))),
+  });
+  r.mod.init({}, r.cx);
+  assert.equal(r.mod.render(), button);
+  assert.equal(icon, "mods/discord-rpc/discord.svg");
+  assert.deepEqual(children, [button], "the launcher has an icon and no visible text");
+  assert.equal(tooltip, "Discord presence");
+  assert.equal(accessibleName, "Discord presence settings");
+  click();
+  assert.deepEqual(overlays, [{ mod: "discord-rpc", kind: "dialog", width: 560, height: 760 }]);
+  await r.mod.close();
+  assert.equal(r.writes.length, 0);
+  assert.equal(r.calls.length, 0);
+  assert.equal(r.tasks.length, 0);
 });
 
 test("close retries a stale snapshot caused by an already-started flush", async () => {

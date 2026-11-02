@@ -1,9 +1,20 @@
-import { View, div } from "gpui-kit";
-import { agents, appHome, exec, focused, panes, readTextFile, spaces, terminals, writeTextFile } from "herdr";
+import { View, div, svg } from "gpui-kit";
+import { Button } from "gpui-base";
+import { agents, appHome, exec, focused, openOverlay, panes, props, readTextFile, spaces, terminals, theme, writeTextFile } from "herdr";
 import { buildActivity, parseConfig } from "./presence.js";
+import Settings from "./settings.js";
 
 export default class DiscordRpc extends View {
   init(_props, cx) {
+    if (props()?.launcher && !props()?.overlay) {
+      this.launcher = true;
+      return;
+    }
+    if (props()?.overlay) {
+      this.settings = new Settings();
+      this.settings.init(_props, cx, data => this.branch(data));
+      return;
+    }
     // shortcut: one host per app home; add owner leases before supporting multiple windows.
     this.directory = appHome() + "/mods/discord-rpc";
     this.runtimeDirectory = appHome() + "/data/discord-rpc";
@@ -75,6 +86,7 @@ export default class DiscordRpc extends View {
   }
 
   async close() {
+    if (this.settings || this.launcher) return;
     this.closing = true;
     const path = this.runtimeDirectory + "/.presence.json";
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -89,6 +101,16 @@ export default class DiscordRpc extends View {
   }
 
   render() {
+    if (this.settings) return this.settings.render();
+    if (this.launcher) {
+      const t = theme();
+      return Button.new("discord-presence-settings").tab_index(0).accessibility_label("Discord presence settings")
+        .tooltip("Discord presence").size_full().px(8).flex().items_center().justify_center()
+        .bg(t.chrome).border_t(1).border_color(t.border).text_color(t.muted)
+        .cursor_pointer().hover(el => el.bg(t.hover).text_color(t.foreground)).focus(el => el.border_color(t.accent))
+        .on_click(() => openOverlay({ mod: "discord-rpc", kind: "dialog", width: 560, height: 760 }))
+        .child(svg("mods/discord-rpc/discord.svg").size(18));
+    }
     this.revision++;
     return div().w(0).h(0);
   }
