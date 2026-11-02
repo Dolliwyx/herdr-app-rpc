@@ -50,7 +50,9 @@ Copy `config.example.json` to the installed mod's `config.json`. It already uses
 
 ### Settings screen
 
-Click the **Discord logo** (tooltip: “Discord presence”) at the bottom-right of the custom layout’s status bar. Alternatively, open the native configuration dialog with:
+Press **Ctrl+Alt+D** after merging the bundled `keys.json` entry into your Herdr app home's `keys.json` under `global`. Preserve existing bindings; choose another key if it is already assigned or conflicts with AltGr typing on your keyboard. Herdr reloads bindings live. The shortcut opens settings in any layout; it does not start presence.
+
+You can also click the **Discord logo** (tooltip: “Discord presence”) at the bottom-right of the custom layout’s status bar, or open the native configuration dialog with:
 
 ```powershell
 herdr-app do mod.open --name discord-rpc

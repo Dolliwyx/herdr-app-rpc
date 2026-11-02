@@ -1,0 +1,5 @@
+{
+  "global": {
+    "ctrl-alt-d": "mod.open:discord-rpc"
+  }
+}
