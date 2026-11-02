@@ -215,7 +215,7 @@ export default class Settings extends View {
         preview = buildActivity(this.previewData ?? { agents: agents(), spaces: spaces(), terminals: terminals(), panes: panes(), focus: this.focus }, { ...config, enabled: true }, this.branchFallback);
       } catch (e) { error = String(e); }
     }
-    const status = !this.hostLive ? "Host is not running. Use your RPC layout to publish activity."
+    const status = !this.hostLive ? "RPC pane is not running. Visit its tab to start presence; keep the pane open when changing layouts."
       : this.config?.enabled === false ? "Sharing paused"
       : ({ published: "Discord acknowledged the last activity", pending: "Waiting to publish", disconnected: "Discord is not connected. Retrying automatically.", starting: "Connecting to Discord", error: "Discord connection error", idle: "Waiting for a workspace" }[this.status?.state] ?? "Waiting for the Discord helper");
     const root = v_flex().id("discord-settings").track_focus(this.handle).w_full().h_full().max_h(760).min_h(0)

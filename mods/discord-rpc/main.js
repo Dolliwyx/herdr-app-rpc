@@ -15,7 +15,10 @@ export default class DiscordRpc extends View {
       this.settings.init(_props, cx, data => this.branch(data));
       return;
     }
-    // shortcut: one host per app home; add owner leases before supporting multiple windows.
+    // Only the explicitly installed tab pane owns presence; old layout blocks stay inert.
+    if (props()?.presenceHost !== true) return;
+    this.host = true;
+    // shortcut: one host pane per app home; add owner leases before supporting multiple windows.
     this.directory = appHome() + "/mods/discord-rpc";
     this.runtimeDirectory = appHome() + "/data/discord-rpc";
     this.revision = 0;
@@ -54,27 +57,30 @@ export default class DiscordRpc extends View {
   }
 
   flush(cx) {
-    if (this.busy || this.closing || (this.revision === this.writtenRevision && Date.now() - this.lastWrite < 10000)) return;
+    if (!this.host || this.busy || this.closing || (this.revision === this.writtenRevision && Date.now() - this.lastWrite < 10000)) return;
     this.busy = true;
     const revision = this.revision;
     cx.spawn(async cx => {
       try {
         let activity = null;
+        let failure = null;
         try {
           const config = parseConfig(await readTextFile(this.directory + "/config.json"));
           const data = { agents: agents(), spaces: spaces(), terminals: terminals(), panes: panes(), focus: focused() };
           const branch = config.enabled === false ? null : await this.branch(data);
           activity = buildActivity(data, config, branch);
         } catch (error) {
+          failure = String(error);
           this.report(error);
         }
         const path = this.runtimeDirectory + "/.presence.json";
         const previous = await readTextFile(path);
         if (this.closing) return;
-        await writeTextFile(path, JSON.stringify({ version: 1, updatedAt: Date.now(), activity }), previous);
+        await writeTextFile(path, JSON.stringify({ version: 1, updatedAt: Date.now(), activity, error: failure }), previous);
         if (this.closing) return;
         const result = await exec("node", [this.directory + "/bridge.mjs", "--start", this.directory]);
         if (result.code !== 0) throw new Error(result.stderr || "Could not start Discord helper");
+        if (!failure) this.lastError = "";
         this.writtenRevision = revision;
         this.lastWrite = Date.now();
       } catch (error) {
@@ -86,7 +92,7 @@ export default class DiscordRpc extends View {
   }
 
   async close() {
-    if (this.settings || this.launcher) return;
+    if (!this.host) return;
     this.closing = true;
     const path = this.runtimeDirectory + "/.presence.json";
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -111,7 +117,18 @@ export default class DiscordRpc extends View {
         .on_click(() => openOverlay({ mod: "discord-rpc", kind: "dialog", width: 560, height: 760 }))
         .child(svg("mods/discord-rpc/discord.svg").size(18));
     }
+    if (!this.host) return div().w(0).h(0);
     this.revision++;
-    return div().w(0).h(0);
+    const t = theme();
+    return div().size_full().flex().flex_col().gap(12).p(18).bg(t.background).text_color(t.foreground).text_size(13)
+      .child(div().text_size(16).font_semibold().child("Discord presence"))
+      .child("Keep this pane open. Presence continues when you change tabs or layouts.")
+      .child("After reopening Herdr, visit this tab once to start presence.")
+      .when(Boolean(this.lastError), el => el.child(div().text_color(t.blocked).child(this.lastError)))
+      .child(Button.new("discord-pane-settings").tab_index(0).accessibility_label("Discord presence settings")
+        .px(12).h(30).rounded(6).bg(t.raised).text_color(t.foreground).cursor_pointer()
+        .hover(el => el.bg(t.hover)).focus(el => el.border_1().border_color(t.accent))
+        .on_click(() => openOverlay({ mod: "discord-rpc", kind: "dialog", width: 560, height: 760 }))
+        .child("Presence settings"));
   }
 }

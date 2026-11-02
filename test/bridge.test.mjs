@@ -89,6 +89,17 @@ async function fixture(t, options = {}, handleCommand) {
   return { directory, runtimeDirectory, bridge, commands, handshakes, pongs, sockets, config, snapshot, status, socketPath };
 }
 
+test('collector failures clear acknowledged activity and surface the state error', async t => {
+  const f = await fixture(t);
+  await waitFor(() => f.bridge.state === 'published');
+  await fs.writeFile(path.join(f.runtimeDirectory, '.presence.json'), JSON.stringify({
+    version: 1, updatedAt: Date.now(), activity: null, error: 'Herdr app is not running',
+  }));
+  await waitFor(async () => (await f.status()).state === 'error' && f.bridge.activity === null && f.commands.some(command => command.args.activity === null));
+  assert.match((await f.status()).error, /Herdr state unavailable: Herdr app is not running/);
+  assert.equal(f.bridge.activity, null);
+});
+
 test('framing handles split headers/bodies, combined frames, and oversized input', () => {
   const first = frame(1, { evt: 'READY' });
   assert.equal(first.readUInt32LE(0), 1);

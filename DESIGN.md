@@ -6,7 +6,7 @@ Inherit Herdr's current theme and UI font through `theme()` and GPUI primitives.
 
 The dialog is a single 560px-wide column, capped at 760px high, with a scrolling body and persistent header/footer. Use 18px outer padding, 13px body text, 12px explanatory text, and a 16px semibold title. Group controls with 6–8px gaps and give section headings extra space above. Inputs and buttons use 6px corners; the activity preview uses 8px corners.
 
-A Discord-logo-only button in a 40px block in the custom layout's bottom-right status bar opens the dialog. Keep the “Discord presence” tooltip and “Discord presence settings” accessible name. The 18px mark inherits the theme's text color. Its `launcher: true` instance never runs a presence host. The existing 1px host remains separate.
+A Discord-logo-only button in a 40px block in the custom layout's bottom-right status bar opens the dialog. Keep the “Discord presence” tooltip and “Discord presence settings” accessible name. The 18px mark inherits the theme's text color. Its `launcher: true` instance never runs a presence host. A separate tab-owned pane with `presenceHost: true` hosts presence and can be resized to zero width after initialization. At a readable width, it shows a short explanation, the startup limitation, and a native Presence settings button using the same theme and typography.
 
 ## Hierarchy and behavior
 

@@ -83,6 +83,20 @@ test("settings load existing config without writing or starting another presence
   assert.equal(r.elements.get("discord-settings").fullHeight, true, "the native scrollbar needs a full-height parent");
 });
 
+test("stopped status points to the RPC pane and its tab", async () => {
+  const r = runtime();
+  r.settings.init({}, r.cx);
+  await r.drain();
+  function text(node) {
+    if (typeof node === "string") return node;
+    return (node?.nodeChildren ?? []).map(text).join("\n");
+  }
+  const rendered = text(r.settings.render());
+  assert.match(rendered, /RPC pane is not running/);
+  assert.match(rendered, /Visit its tab/);
+  assert.doesNotMatch(rendered, /RPC layout/);
+});
+
 test("pause persists immediately without saving draft edits, and Cancel cannot resume it", async () => {
   const r = runtime();
   r.settings.init({}, r.cx);

@@ -8,7 +8,7 @@ import { Bridge } from '../mods/discord-rpc/bridge.mjs';
 import { buildActivity, parseConfig } from '../mods/discord-rpc/presence.js';
 
 // Exercise both producers against one app home, including their atomic temporary files.
-test('heartbeat, close, bridge status and temporary writes stay outside watched mods', async (t) => {
+test('pane heartbeat, close, bridge status and temporary writes stay outside watched mods', async t => {
   const home = await fs.mkdtemp(path.join(os.tmpdir(), 'rpc-isolation-'));
   const directory = path.join(home, 'mods/discord-rpc');
   const data = path.join(home, 'data/discord-rpc');
@@ -26,8 +26,8 @@ test('heartbeat, close, bridge status and temporary writes stay outside watched 
   const tasks = [];
   const Class = vm.runInNewContext(source, {
     View: class {}, console, appHome: () => home,
-    agents: () => [], spaces: () => [], terminals: () => [], panes: () => [], focused: () => null, props: () => null,
-    buildActivity, parseConfig,
+    agents: () => [], spaces: () => [], terminals: () => [], panes: () => [], focused: () => null,
+    props: () => ({ presenceHost: true }), buildActivity, parseConfig,
     readTextFile: async file => fs.readFile(file, 'utf8').catch(error => { if (error.code === 'ENOENT') return null; throw error; }),
     writeTextFile: async (file, text) => {
       outputs.push(file);
@@ -36,7 +36,8 @@ test('heartbeat, close, bridge status and temporary writes stay outside watched 
       await fs.writeFile(temporary, text);
       await fs.rename(temporary, file);
     },
-    exec: async (_command, args) => {
+    exec: async (command, args) => {
+      assert.equal(command, 'node');
       assert.equal(path.resolve(args[0]), path.join(directory, 'bridge.mjs'));
       assert.equal(args[1], '--start');
       assert.equal(path.resolve(args[2]), directory);
@@ -47,6 +48,7 @@ test('heartbeat, close, bridge status and temporary writes stay outside watched 
   const cx = { timer: { every() {} }, spawn(body) { tasks.push(body(cx)); } };
   mod.init({}, cx);
   await Promise.all(tasks);
+  assert.equal(JSON.parse(await fs.readFile(path.join(data, '.presence.json'), 'utf8')).activity, null);
   mod.lastWrite = 0;
   mod.flush(cx);
   await Promise.all(tasks);

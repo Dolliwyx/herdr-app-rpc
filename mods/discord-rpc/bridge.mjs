@@ -231,6 +231,7 @@ export class Bridge {
         }
         this.lastFreshAt = Date.now();
         snapshot.activity = validateActivity(snapshot.activity);
+        if (typeof snapshot.error === 'string' && snapshot.error) failure = `Herdr state unavailable: ${snapshot.error.slice(0, 300)}`;
       } catch (error) {
         failure = `Invalid .presence.json: ${error.message}`;
         if (Date.now() - this.lastFreshAt > this.options.staleMs) {
