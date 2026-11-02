@@ -1,4 +1,4 @@
-# Herdr Discord presence
+# Discord Presence
 
 Share the selected Herdr workspace, its focused terminal’s branch, the agent harness, and app-wide agent counts as a Discord Playing activity named **Herdr**. A small Discord button opens native settings with a draft activity preview, editable presence text, privacy rules, and artwork preferences. The presence host itself is invisible. The screenshot shows a configured installation, not the default text.
 
