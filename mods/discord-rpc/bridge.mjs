@@ -164,6 +164,7 @@ async function readJson(file) {
 export class Bridge {
   constructor(directory, options = {}) {
     this.directory = directory;
+    this.runtimeDirectory = path.resolve(directory, '../../data/discord-rpc');
     this.options = { pollMs: 1000, reconnectMs: 5000, publishMs: 15000, staleMs: 45000, futureMs: 5000, timeoutMs: 5000, ...options };
     this.paths = options.paths ?? Array.from({ length: 10 }, (_, n) => `\\\\.\\pipe\\discord-ipc-${n}`);
     this.state = 'starting';
@@ -191,11 +192,12 @@ export class Bridge {
     this.statusSignature = signature;
     const text = JSON.stringify({ ...record, updatedAt: Date.now() }, null, 2) + '\n';
     this.statusWrites = this.statusWrites.catch(() => {}).then(async () => {
-      const temporary = path.join(this.directory, `.status-${process.pid}.tmp`);
+      await fs.mkdir(this.runtimeDirectory, { recursive: true });
+      const temporary = path.join(this.runtimeDirectory, `.status-${process.pid}.tmp`);
       await fs.writeFile(temporary, text);
       for (let attempt = 0; ; attempt++) {
         try {
-          await fs.rename(temporary, path.join(this.directory, '.status.json'));
+          await fs.rename(temporary, path.join(this.runtimeDirectory, '.status.json'));
           break;
         } catch (error) {
           // Windows readers can briefly hold a delete-sharing lock on the destination.
@@ -214,7 +216,7 @@ export class Bridge {
       let snapshot;
       let failure;
       try {
-        snapshot = await readJson(path.join(this.directory, '.presence.json'));
+        snapshot = await readJson(path.join(this.runtimeDirectory, '.presence.json'));
         if (this.stopping) return;
         if (snapshot.version !== 1 || !Number.isSafeInteger(snapshot.updatedAt)) throw new Error('Invalid snapshot version/heartbeat');
         const age = Date.now() - snapshot.updatedAt;
@@ -416,6 +418,7 @@ async function main() {
   const [mode, argument] = process.argv.slice(2);
   if (!['--start', '--daemon'].includes(mode) || !argument) throw new Error('Usage: node bridge.mjs --start <modDirectory>');
   const directory = await fs.realpath(path.resolve(argument));
+  // Keep the old singleton identity so upgrades wait for the old heartbeat lease to expire.
   const address = lockPath(directory);
   if (mode === '--start') {
     if (await lockExists(address)) return;

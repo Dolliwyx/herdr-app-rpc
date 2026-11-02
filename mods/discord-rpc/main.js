@@ -6,6 +6,7 @@ export default class DiscordRpc extends View {
   init(_props, cx) {
     // shortcut: one host per app home; add owner leases before supporting multiple windows.
     this.directory = appHome() + "/mods/discord-rpc";
+    this.runtimeDirectory = appHome() + "/data/discord-rpc";
     this.revision = 0;
     this.writtenRevision = -1;
     this.lastWrite = 0;
@@ -56,7 +57,7 @@ export default class DiscordRpc extends View {
         } catch (error) {
           this.report(error);
         }
-        const path = this.directory + "/.presence.json";
+        const path = this.runtimeDirectory + "/.presence.json";
         const previous = await readTextFile(path);
         if (this.closing) return;
         await writeTextFile(path, JSON.stringify({ version: 1, updatedAt: Date.now(), activity }), previous);
@@ -75,7 +76,7 @@ export default class DiscordRpc extends View {
 
   async close() {
     this.closing = true;
-    const path = this.directory + "/.presence.json";
+    const path = this.runtimeDirectory + "/.presence.json";
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
         const previous = await readTextFile(path);

@@ -29,13 +29,13 @@ function runtime(overrides = {}) {
   return { mod: new Class(), cx, writes, tasks, calls, tick: () => callback(cx) };
 }
 
-test("mod coalesces concurrent flushes and writes a hidden heartbeat snapshot", async () => {
+test("mod coalesces concurrent flushes and writes a heartbeat outside mods", async () => {
   const r = runtime();
   r.mod.init({}, r.cx);
   r.mod.flush(r.cx);
   await Promise.all(r.tasks);
   assert.equal(r.writes.length, 1);
-  assert.equal(r.writes[0][0], "/app/mods/discord-rpc/.presence.json");
+  assert.equal(r.writes[0][0], "/app/data/discord-rpc/.presence.json");
   const snapshot = JSON.parse(r.writes[0][1]);
   assert.equal(snapshot.version, 1);
   assert.ok(Date.now() - snapshot.updatedAt < 1000);
@@ -72,7 +72,8 @@ test("close retries a stale snapshot caused by an already-started flush", async 
   let attempts = 0;
   const r = runtime({
     readTextFile: async () => state,
-    writeTextFile: async (_path, next, expected) => {
+    writeTextFile: async (path, next, expected) => {
+      assert.equal(path, "/app/data/discord-rpc/.presence.json");
       attempts++;
       if (attempts === 1) {
         state = '{"activity":{"details":"in-flight"}}';
@@ -82,7 +83,7 @@ test("close retries a stale snapshot caused by an already-started flush", async 
       state = next;
     },
   });
-  r.mod.directory = "/app/mods/discord-rpc";
+  r.mod.runtimeDirectory = "/app/data/discord-rpc";
   await r.mod.close();
   assert.equal(attempts, 2);
   assert.equal(r.mod.closing, true);
