@@ -41,9 +41,40 @@ Copy `config.example.json` to the installed mod's `config.json`. It already uses
   "enabled": true,
   "privatePatterns": ["client-*", "Personal"],
   "largeImageKey": "herdr",
-  "showHarnessIcon": true
+  "showHarnessIcon": true,
+  "detailsTemplate": "{workspace} · {branch}",
+  "stateTemplate": "{harness} · {agents.running}/{agents.total} agents active",
+  "statusDisplayType": "name"
 }
 ```
+
+### Settings screen
+
+Click the **Discord logo** (tooltip: “Discord presence”) at the bottom-right of the custom layout’s status bar. Alternatively, open the native configuration dialog with:
+
+```powershell
+herdr-app do mod.open --name discord-rpc
+```
+
+The dialog is separate from the headless layout host: opening or closing settings does not start another helper or clear presence. **Save** applies your draft together; **Cancel** discards it. Turning sharing **off pauses immediately**, even if you later cancel. Turning it back on requires Save. Reload discards draft edits and rereads the file. Saves are atomic and refuse to overwrite a configuration changed elsewhere; Reload after a conflict. Missing configuration starts with the shared application defaults; malformed configuration must be fixed in the file before editing.
+
+The preview shows draft text for the current workspace, including privacy changes, independently of whether sharing is paused. Connection status and the last Discord acknowledgment are labeled separately. Artwork uses the local Herdr image as a reference for the shared application's default `herdr` key; asset-key labels identify the configured images, not a fetched Discord rendering.
+
+### Presence templates
+
+Both `detailsTemplate` and `stateTemplate` accept ordinary text and these variables. Focus either field, then use a variable button to insert at the cursor or replace the selection.
+
+| Variable | Value |
+| --- | --- |
+| `{workspace}` | Selected workspace name, or `Private workspace` |
+| `{branch}` | Focused terminal's branch; empty for non-Git or private workspaces |
+| `{harness}` | Focused agent's harness, or the workspace's top-level harnesses |
+| `{agents.running}` | Working live top-level reporting agents across all spaces |
+| `{agents.total}` | All live top-level reporting agents across all spaces |
+
+Privacy is applied **before** substitution, in either field. Raw paths and other terminal metadata are not available as variables. Empty variables remove adjacent template separators (such as ` · ` or ` | `), never punctuation inside variable values. Literal text is left as you entered it: do not type sensitive names directly into templates. Unknown variables and malformed braces are rejected. Templates allow up to 512 characters; rendered lines are sanitized and truncated to 128 Unicode codepoints. Blank templates omit that optional field; a one-character result is prefixed with `In ` for Discord's minimum text length. Omitted template settings retain the original format; Reset text restores it.
+
+`statusDisplayType` selects the text shown in Discord's member list: `name` (Herdr, the default), `state`, or `details`. The expanded activity retains both text lines. If the selected template renders empty, the member-list display falls back to the app name.
 
 Set `enabled` to `false` to pause. Invalid configuration fails closed. Omit `largeImageKey` for text-only presence. Uploaded small-image keys supported by this version include `pi`, `claude`, `codex`, `gemini`, `opencode`, `cursor`, and `copilot`.
 
@@ -72,9 +103,23 @@ Requires Windows Node.js 20+, desktop Discord with activity sharing enabled, and
    {"id":"discord-rpc","type":"block","size":{"px":1},"content":{"mod":"discord-rpc"}}
    ```
 
-The mod starts automatically in that personal layout. The 1px host lets it start without adding a panel or changing shipped mods. Keep **one host per Herdr app home**; multiple windows writing the same snapshot are not supported. Switching layouts closes the host, clearing this helper's presence. Return to `main-rpc` to resume.
+5. For a clickable launcher, replace the existing `status` block with a row containing that same status mod and a launcher block:
+
+   ```json
+   {
+     "id": "status-row", "type": "row", "resizable": false, "size": {"px": 28},
+     "children": [
+       {"id": "status", "type": "block", "size": {"weight": 1}, "content": {"mod": "workspace-status"}},
+       {"id": "discord-settings-button", "type": "block", "size": {"px": 40}, "content": {"mod": "discord-rpc", "props": {"launcher": true}}}
+     ]
+   }
+   ```
+
+The mod starts automatically in that personal layout. The 1px host runs presence; the separate launcher only opens settings and never starts or clears presence. No shipped mods are changed. Keep **one host per Herdr app home**; multiple windows writing the same snapshot are not supported. Switching layouts closes the host, clearing this helper's presence. Return to `main-rpc` to resume.
 
 From WSL, the Windows CLI is available through `/mnt/c/Program Files/PowerShell/7/pwsh.exe`; the agent's native Linux PATH does not contain it. `~/.config/herdr-app` here is a symlink to the Windows app home.
+
+When upgrading an already-running installation, the helper process retains its loaded JavaScript. Switch to `main` first and let the heartbeat lease expire (45 seconds, plus an in-flight clear timeout) so the old helper exits; copy the updated mod files without overwriting your local `config.json`, then return to `main-rpc`. Merely opening the new settings dialog does not upgrade the old helper.
 
 To remove it, switch back to `main`, then remove the personal `main-rpc` layout and `mods/discord-rpc` folder. Do not delete Herdr's shipped `main` layout.
 
