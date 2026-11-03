@@ -5,6 +5,9 @@
   "largeImageKey": "herdr",
   "showHarnessIcon": true,
   "detailsTemplate": "{workspace} · {branch}",
+  "stateTemplates": [],
+  "shuffleState": false,
+  "stateIntervalMinutes": 3,
   "stateTemplate": "{harness} · {agents.running}/{agents.total} agents active",
   "statusDisplayType": "name"
 }

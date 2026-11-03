@@ -86,6 +86,71 @@ test("settings load existing config without writing or starting another presence
   assert.equal(r.elements.get("discord-settings").fullHeight, true, "the native scrollbar needs a full-height parent");
 });
 
+test("State alternatives support insertion, preview, save, reload, removal and reset", async () => {
+  const r = runtime();
+  r.settings.init({}, r.cx);
+  await r.drain();
+  assert.equal(r.settings.shuffleState, false);
+  assert.equal(r.settings.inputs.stateIntervalMinutes.value(), "3");
+  r.settings.render();
+  r.elements.get("add-template").click({}, r.cx);
+  const row = r.settings.stateTemplates[0];
+  row.input.set_value("Working in ");
+  row.input.focus();
+  r.settings.render();
+  r.elements.get("variable-workspace").click({}, r.cx);
+  assert.equal(row.input.value(), "Working in {workspace}");
+  r.settings.shuffleState = true;
+  r.settings.inputs.stateIntervalMinutes.set_value("5");
+  function text(node) { return typeof node === "string" ? node : (node?.nodeChildren ?? []).map(text).join("\n"); }
+  assert.match(text(r.settings.render()), /Working in client-acme/);
+  r.settings.inputs.pattern.set_value("client-*");
+  assert.match(text(r.settings.render()), /Working in Private workspace/);
+  r.settings.save(r.cx);
+  await r.drain();
+  assert.deepEqual(r.writes[0].config.stateTemplates, ["Working in {workspace}"]);
+  assert.equal(r.writes[0].config.shuffleState, true);
+  assert.equal(r.writes[0].config.stateIntervalMinutes, 5);
+  assert.equal(r.writes[0].config.stateTemplate, DEFAULT_STATE, "preview must not replace the saved default");
+  r.settings.load(r.cx);
+  await r.drain();
+  assert.equal(r.settings.stateTemplates[0].input.value(), "Working in {workspace}");
+  assert.equal(r.settings.shuffleState, true);
+  r.settings.stateTemplates[0].input.focus();
+  r.settings.render();
+  r.elements.get("remove-" + r.settings.stateTemplates[0].id).click({}, r.cx);
+  assert.equal(r.settings.stateTemplates.length, 0);
+  assert.equal(r.settings.activeField, "stateTemplate");
+  r.settings.addTemplate(r.cx, "Another");
+  r.settings.render();
+  r.elements.get("reset").click({}, r.cx);
+  assert.equal(r.settings.stateTemplates.length, 0);
+  assert.equal(r.settings.shuffleState, false);
+  assert.equal(r.settings.inputs.stateIntervalMinutes.value(), "3");
+});
+
+test("invalid shuffle drafts block saving and pause does not persist alternatives", async () => {
+  const r = runtime();
+  r.settings.init({}, r.cx);
+  await r.drain();
+  r.settings.addTemplate(r.cx, "{unknown}");
+  r.settings.save(r.cx);
+  assert.match(r.settings.error, /Unknown variable/);
+  r.settings.stateTemplates[0].input.set_value("Valid");
+  r.settings.inputs.stateIntervalMinutes.set_value("");
+  r.settings.save(r.cx);
+  assert.match(r.settings.error, /whole number/);
+  assert.equal(r.writes.length, 0);
+  r.settings.sharing(false, r.cx);
+  await r.drain();
+  assert.deepEqual(r.writes[0].config, { ...initial, enabled: false });
+  r.settings.inputs.stateIntervalMinutes.set_value("3");
+  r.settings.shuffleState = false;
+  r.settings.save(r.cx);
+  await r.drain();
+  assert.deepEqual(r.writes[1].config.stateTemplates, ["Valid"], "turning shuffle off keeps alternatives");
+});
+
 test("stopped status points to the RPC pane and its tab", async () => {
   const r = runtime();
   r.settings.init({}, r.cx);

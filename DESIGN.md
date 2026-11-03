@@ -12,7 +12,7 @@ A Discord-logo-only button in a 40px block in the custom layout's bottom-right s
 
 1. Title, connection status, a Create RPC pane recovery button (Go to RPC pane when one exists), and sharing toggle. Pane recovery preserves the settings draft and uses the existing native button style.
 2. Draft preview: compact member-list status and expanded activity text; distinguish it from Discord-acknowledged activity. Local artwork is a reference, not a remote rendering.
-3. Presence text: member-list display selection, Details and State templates, insertion buttons targeting the last focused field, and Reset text.
+3. Presence text: member-list display selection, Details and State templates, a State shuffle checkbox/switch with a whole-minute interval (default 3, range 1–1440), editable alternatives with Add template/Remove, insertion buttons targeting the last focused template, and Reset text. Shuffle includes the main State template; disabling it preserves alternatives. Focusing an alternative while shuffle is on previews that template. Reset text clears alternatives and disables shuffle.
 4. Workspace privacy rules, then appearance preferences.
 5. Advanced application ID and image asset key, collapsed initially.
 6. Reload, Cancel, and Save remain visible below the scrolling body.

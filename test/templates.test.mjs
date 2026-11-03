@@ -74,6 +74,19 @@ test("blank templates omit optional fields and one-character text remains valid"
   assert.equal(buildActivity(data(), { ...config, detailsTemplate: "", statusDisplayType: "details" }).status_display_type, 0);
 });
 
+test("shuffle config validates every alternative, toggle and interval even when disabled", () => {
+  for (const invalid of [
+    { stateTemplates: "text" }, { stateTemplates: null }, { stateTemplates: [42] },
+    { stateTemplates: ["{unknown}"] }, { stateTemplates: ["{workspace"] }, { stateTemplates: ["x".repeat(513)] },
+    { shuffleState: "true" }, { shuffleState: null },
+    ...[0, -1, 1.5, 1441, "3", null].map(stateIntervalMinutes => ({ stateIntervalMinutes })),
+  ]) assert.throws(() => parseConfig(JSON.stringify({ ...config, ...invalid })));
+  for (const stateIntervalMinutes of [1, 3, 1440]) {
+    const valid = { ...config, stateTemplates: ["", "{workspace}"], shuffleState: false, stateIntervalMinutes };
+    assert.deepEqual(parseConfig(JSON.stringify(valid)), valid);
+  }
+});
+
 test("unknown variables, malformed braces, invalid types and display choices are rejected", () => {
   for (const template of ["{model}", "{toString}", "{__proto__}", "{workspace", "workspace}", "{{branch}}", null, 42, "a".repeat(513)]) {
     for (const key of ["detailsTemplate", "stateTemplate"]) {
