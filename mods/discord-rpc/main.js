@@ -1,7 +1,7 @@
 import { View, div, svg } from "gpui-kit";
 import { Button } from "gpui-base";
 import { agents, appHome, exec, focused, openOverlay, panes, props, readTextFile, spaces, terminals, theme, writeTextFile } from "herdr";
-import { buildActivity, parseConfig } from "./presence.js";
+import { buildActivity, DEFAULT_DETAILS, parseConfig } from "./presence.js";
 import Settings from "./settings.js";
 
 export default class DiscordRpc extends View {
@@ -56,6 +56,23 @@ export default class DiscordRpc extends View {
     return value;
   }
 
+  detailsConfig(config) {
+    if (!config.shuffleDetails || config.enabled === false) {
+      this.detailsShuffle = null;
+      return config;
+    }
+    const templates = [...new Set([config.detailsTemplate ?? DEFAULT_DETAILS, ...(config.detailsTemplates ?? [])])];
+    const interval = (config.detailsIntervalMinutes ?? 3) * 60000;
+    const key = JSON.stringify([templates, interval]);
+    const now = Date.now();
+    if (this.detailsShuffle?.key !== key || now - this.detailsShuffle.at >= interval) {
+      const choices = templates.filter(template => template !== this.detailsShuffle?.template);
+      const template = choices.length ? choices[Math.floor(Math.random() * choices.length)] : templates[0];
+      this.detailsShuffle = { key, template, at: now };
+    }
+    return { ...config, detailsTemplate: this.detailsShuffle.template };
+  }
+
   flush(cx) {
     if (!this.host || this.busy || this.closing || (this.revision === this.writtenRevision && Date.now() - this.lastWrite < 10000)) return;
     this.busy = true;
@@ -68,7 +85,7 @@ export default class DiscordRpc extends View {
           const config = parseConfig(await readTextFile(this.directory + "/config.json"));
           const data = { agents: agents(), spaces: spaces(), terminals: terminals(), panes: panes(), focus: focused() };
           const branch = config.enabled === false ? null : await this.branch(data);
-          activity = buildActivity(data, config, branch);
+          activity = buildActivity(data, this.detailsConfig(config), branch);
         } catch (error) {
           failure = String(error);
           this.report(error);

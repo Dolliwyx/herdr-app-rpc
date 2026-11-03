@@ -42,6 +42,9 @@ The installer creates the installed mod’s `config.json` from `config.example.j
   "largeImageKey": "herdr",
   "showHarnessIcon": true,
   "detailsTemplate": "{workspace} · {branch}",
+  "detailsTemplates": [],
+  "shuffleDetails": false,
+  "detailsIntervalMinutes": 3,
   "stateTemplate": "{harness} · {agents.running}/{agents.total} agents active",
   "statusDisplayType": "name"
 }
@@ -76,6 +79,10 @@ Both `detailsTemplate` and `stateTemplate` accept ordinary text and these variab
 | `{agents.total}` | All live top-level reporting agents across all spaces |
 
 Privacy is applied **before** substitution, in either field. Raw paths and other terminal metadata are not available as variables. Empty variables remove adjacent template separators (such as ` · ` or ` | `), never punctuation inside variable values. Literal text is left as you entered it: do not type sensitive names directly into templates. Unknown variables and malformed braces are rejected. Templates allow up to 512 characters; rendered lines are sanitized and truncated to 128 Unicode codepoints. Blank templates omit that optional field; a one-character result is prefixed with `In ` for Discord's minimum text length. Omitted template settings retain the original format; Reset text restores it.
+
+Enable **Shuffle Details templates** to randomly rotate between the main Details template and any alternatives added with **Add template**. The interval defaults to **3 minutes** and accepts whole minutes from **1 to 1440**. Identical templates are deduplicated and the next selection never repeats the previous template when another is available (different templates may still render the same text). With one unique template, it stays unchanged. State is not shuffled. Turning shuffle off restores the main Details template without deleting alternatives.
+
+These settings persist as `shuffleDetails`, `detailsTemplates` (the alternatives), and `detailsIntervalMinutes`. Old configurations remain unchanged until saved, with shuffle off by default. Each alternative supports the same variables, validation and privacy rules; blank templates can omit Details. While shuffle is enabled, focus an alternative to preview it and target variable insertion. Save applies the list, toggle and interval together; Reset text clears alternatives and turns shuffle off. Selection restarts when shuffle settings change, sharing resumes or the host restarts. Rotation runs on the existing host heartbeat (up to ten seconds after the interval), subject to the helper’s normal publication throttle.
 
 `statusDisplayType` selects the text shown in Discord's member list: `name` (Herdr, the default), `state`, or `details`. The expanded activity retains both text lines. If the selected template renders empty, the member-list display falls back to the app name.
 

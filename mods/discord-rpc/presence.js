@@ -60,6 +60,14 @@ export function parseConfig(source) {
   for (const key of ["detailsTemplate", "stateTemplate"]) {
     if (config[key] !== undefined) validateTemplate(config[key]);
   }
+  if (config.detailsTemplates !== undefined) {
+    if (!Array.isArray(config.detailsTemplates)) throw new Error("config.json detailsTemplates must be an array of templates");
+    for (const template of config.detailsTemplates) validateTemplate(template);
+  }
+  if (config.shuffleDetails !== undefined && typeof config.shuffleDetails !== "boolean")
+    throw new Error("config.json shuffleDetails must be true or false");
+  if (config.detailsIntervalMinutes !== undefined && (!Number.isInteger(config.detailsIntervalMinutes) || config.detailsIntervalMinutes < 1 || config.detailsIntervalMinutes > 1440))
+    throw new Error("Details shuffle interval must be a whole number from 1 to 1440 minutes");
   if (config.statusDisplayType !== undefined && !["name", "state", "details"].includes(config.statusDisplayType))
     throw new Error("config.json statusDisplayType must be name, state, or details");
   return config;
