@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import vm from "node:vm";
 import test from "node:test";
-import { buildActivity, DEFAULT_DETAILS, parseConfig } from "../mods/discord-rpc/presence.js";
+import { buildActivity, DEFAULT_STATE, parseConfig } from "../mods/discord-rpc/presence.js";
 
 // The native GPUI modules aren't available in Node; substitute just their host APIs.
 const source = (await readFile(new URL("../mods/discord-rpc/main.js", import.meta.url), "utf8"))
@@ -23,7 +23,7 @@ function runtime(overrides = {}) {
     readTextFile: async path => path.endsWith("/config.json") ? config : null,
     writeTextFile: async (...args) => writes.push(args),
     exec: async (...args) => { calls.push(args); return { code: 0 }; },
-    buildActivity, DEFAULT_DETAILS, parseConfig,
+    buildActivity, DEFAULT_STATE, parseConfig,
     ...overrides,
   });
   const cx = { notify() {}, timer: { every(...args) { timers.push(args); } }, spawn(body) { const task = body(cx); tasks.push(task); return task; } };
@@ -31,45 +31,55 @@ function runtime(overrides = {}) {
     tick: () => timers[0][1](cx), advance: ms => { now += ms; } };
 }
 
-test("Details shuffle holds until its interval, avoids repeats, and resets on disable or edits", async () => {
-  let config = { clientId: "123456789012345678", shuffleDetails: true, detailsTemplates: ["Alternative", "Alternative"] };
+test("State shuffle holds until its interval, avoids repeats, and resets on disable or edits", async () => {
+  let config = { clientId: "123456789012345678", detailsTemplate: "Fixed Details", statusDisplayType: "state", shuffleState: true, stateTemplates: ["Alternative", "Alternative"] };
   const r = runtime({
     Math: { random: () => 0, floor: Math.floor },
     spaces: () => [{ id: "s", name: "Workspace", active: true }],
     readTextFile: async path => path.endsWith("/config.json") ? JSON.stringify(config) : null,
   });
-  const flush = async ms => { r.advance(ms); r.tick(); await Promise.all(r.tasks); return JSON.parse(r.writes.at(-1)[1]).activity; };
+  const flush = async ms => {
+    r.advance(ms);
+    r.tick();
+    await Promise.all(r.tasks);
+    const activity = JSON.parse(r.writes.at(-1)[1]).activity;
+    if (activity) {
+      assert.equal(activity.details, "Fixed Details", "shuffling State must never change Details");
+      assert.equal(activity.status_display_type, 1);
+    }
+    return activity;
+  };
   r.mod.init({}, r.cx);
   await Promise.all(r.tasks);
-  assert.equal(JSON.parse(r.writes[0][1]).activity.details, "Workspace");
-  assert.equal((await flush(179999)).details, "Workspace");
-  assert.equal((await flush(10001)).details, "Alternative");
-  assert.equal((await flush(180000)).details, "Workspace");
-  config.detailsIntervalMinutes = 1;
-  assert.equal((await flush(10000)).details, "Alternative", "interval edits reset the selection and timer");
-  assert.equal((await flush(59999)).details, "Alternative");
-  assert.equal((await flush(10001)).details, "Workspace");
-  config.detailsTemplates = ["New alternative"];
-  assert.equal((await flush(10000)).details, "New alternative");
-  config.shuffleDetails = false;
-  assert.equal((await flush(10000)).details, "Workspace");
-  assert.equal(r.mod.detailsShuffle, null);
-  config.shuffleDetails = true;
+  assert.equal(JSON.parse(r.writes[0][1]).activity.state, "0/0 agents active");
+  assert.equal((await flush(179999)).state, "0/0 agents active");
+  assert.equal((await flush(10001)).state, "Alternative");
+  assert.equal((await flush(180000)).state, "0/0 agents active");
+  config.stateIntervalMinutes = 1;
+  assert.equal((await flush(10000)).state, "Alternative", "interval edits reset the selection and timer");
+  assert.equal((await flush(59999)).state, "Alternative");
+  assert.equal((await flush(10001)).state, "0/0 agents active");
+  config.stateTemplates = ["New alternative"];
+  assert.equal((await flush(10000)).state, "New alternative");
+  config.shuffleState = false;
+  assert.equal((await flush(10000)).state, "0/0 agents active");
+  assert.equal(r.mod.stateShuffle, null);
+  config.shuffleState = true;
   config.enabled = false;
   assert.equal(await flush(10000), null);
-  assert.equal(r.mod.detailsShuffle, null);
+  assert.equal(r.mod.stateShuffle, null);
 });
 
-test("Details shuffle supports a single template and keeps privacy and State intact", async () => {
+test("State shuffle supports a single template and keeps privacy and Details intact", async () => {
   const r = runtime({ Math: { random: () => 0.99, floor: Math.floor } });
-  const single = { shuffleDetails: true, detailsTemplate: "Only", detailsTemplates: ["Only"] };
-  assert.equal(r.mod.detailsConfig(single).detailsTemplate, "Only");
+  const single = { shuffleState: true, stateTemplate: "Only", stateTemplates: ["Only"] };
+  assert.equal(r.mod.stateConfig(single).stateTemplate, "Only");
   r.advance(180000);
-  assert.equal(r.mod.detailsConfig(single).detailsTemplate, "Only");
-  const config = r.mod.detailsConfig({ shuffleDetails: true, detailsTemplates: ["{workspace} | {branch}"], privatePatterns: ["Secret"] });
+  assert.equal(r.mod.stateConfig(single).stateTemplate, "Only");
+  const config = r.mod.stateConfig({ shuffleState: true, stateTemplates: ["{workspace} | {branch}"], privatePatterns: ["Secret"] });
   const activity = buildActivity({ spaces: [{ id: "s", name: "Secret", active: true }], agents: [], terminals: [], panes: [] }, config);
+  assert.equal(activity.state, "Private workspace");
   assert.equal(activity.details, "Private workspace");
-  assert.equal(activity.state, "0/0 agents active");
 });
 
 test("pane host coalesces concurrent flushes and renews its heartbeat outside mods", async () => {

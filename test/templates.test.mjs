@@ -76,13 +76,13 @@ test("blank templates omit optional fields and one-character text remains valid"
 
 test("shuffle config validates every alternative, toggle and interval even when disabled", () => {
   for (const invalid of [
-    { detailsTemplates: "text" }, { detailsTemplates: null }, { detailsTemplates: [42] },
-    { detailsTemplates: ["{unknown}"] }, { detailsTemplates: ["{workspace"] }, { detailsTemplates: ["x".repeat(513)] },
-    { shuffleDetails: "true" }, { shuffleDetails: null },
-    ...[0, -1, 1.5, 1441, "3", null].map(detailsIntervalMinutes => ({ detailsIntervalMinutes })),
+    { stateTemplates: "text" }, { stateTemplates: null }, { stateTemplates: [42] },
+    { stateTemplates: ["{unknown}"] }, { stateTemplates: ["{workspace"] }, { stateTemplates: ["x".repeat(513)] },
+    { shuffleState: "true" }, { shuffleState: null },
+    ...[0, -1, 1.5, 1441, "3", null].map(stateIntervalMinutes => ({ stateIntervalMinutes })),
   ]) assert.throws(() => parseConfig(JSON.stringify({ ...config, ...invalid })));
-  for (const detailsIntervalMinutes of [1, 3, 1440]) {
-    const valid = { ...config, detailsTemplates: ["", "{workspace}"], shuffleDetails: false, detailsIntervalMinutes };
+  for (const stateIntervalMinutes of [1, 3, 1440]) {
+    const valid = { ...config, stateTemplates: ["", "{workspace}"], shuffleState: false, stateIntervalMinutes };
     assert.deepEqual(parseConfig(JSON.stringify(valid)), valid);
   }
 });

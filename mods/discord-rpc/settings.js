@@ -11,11 +11,11 @@ export default class Settings extends View {
     this.path = appHome() + "/mods/discord-rpc/config.json";
     this.runtimeDirectory = appHome() + "/data/discord-rpc";
     this.handle = cx.focus_handle();
-    this.toggleFocus = Object.fromEntries(["enabled", "artwork", "harness-icon", "shuffle-details"].map(id => [id, cx.focus_handle()]));
+    this.toggleFocus = Object.fromEntries(["enabled", "artwork", "harness-icon", "shuffle-state"].map(id => [id, cx.focus_handle()]));
     this.focus = focused();
     this.inputs = {};
     this.patterns = [];
-    this.detailTemplates = [];
+    this.stateTemplates = [];
     this.nextTemplate = 0;
     this.nextPattern = 0;
     this.activeField = "detailsTemplate";
@@ -48,8 +48,8 @@ export default class Settings extends View {
         const source = await readTextFile(this.path);
         const config = source === null ? { ...DEFAULT_CONFIG } : parseConfig(source);
         for (const input of Object.values(this.inputs)) input.release();
-        for (const row of [...this.patterns, ...this.detailTemplates]) row.input.release();
-        this.detailTemplates = [];
+        for (const row of [...this.patterns, ...this.stateTemplates]) row.input.release();
+        this.stateTemplates = [];
         this.activeField = "detailsTemplate";
         this.source = source;
         this.config = config;
@@ -57,16 +57,16 @@ export default class Settings extends View {
         this.artwork = Boolean(config.largeImageKey);
         this.harnessIcon = config.showHarnessIcon !== false;
         this.displayType = config.statusDisplayType ?? "name";
-        this.shuffleDetails = config.shuffleDetails ?? false;
+        this.shuffleState = config.shuffleState ?? false;
         this.inputs = {
           detailsTemplate: this.input(config.detailsTemplate ?? DEFAULT_DETAILS, cx, "detailsTemplate"),
           stateTemplate: this.input(config.stateTemplate ?? DEFAULT_STATE, cx, "stateTemplate"),
           clientId: this.input(config.clientId, cx),
           largeImageKey: this.input(config.largeImageKey ?? "herdr", cx),
           pattern: this.input("", cx),
-          detailsIntervalMinutes: this.input(String(config.detailsIntervalMinutes ?? 3), cx),
+          stateIntervalMinutes: this.input(String(config.stateIntervalMinutes ?? 3), cx),
         };
-        for (const value of config.detailsTemplates ?? []) this.addTemplate(cx, value);
+        for (const value of config.stateTemplates ?? []) this.addTemplate(cx, value);
         this.patterns = (config.privatePatterns ?? []).map(value => ({ id: this.nextPattern++, input: this.input(value, cx) }));
         this.inputs.pattern.on("submit", (_e, cx) => this.addPattern(cx));
         this.loaded = true;
@@ -155,9 +155,9 @@ export default class Settings extends View {
       showHarnessIcon: this.harnessIcon,
       detailsTemplate: this.inputs.detailsTemplate.value(),
       stateTemplate: this.inputs.stateTemplate.value(),
-      detailsTemplates: this.detailTemplates.map(row => row.input.value()),
-      shuffleDetails: this.shuffleDetails,
-      detailsIntervalMinutes: Number(this.inputs.detailsIntervalMinutes.value()),
+      stateTemplates: this.stateTemplates.map(row => row.input.value()),
+      shuffleState: this.shuffleState,
+      stateIntervalMinutes: Number(this.inputs.stateIntervalMinutes.value()),
       statusDisplayType: this.displayType,
     };
     if (this.artwork) config.largeImageKey = this.inputs.largeImageKey.value().trim();
@@ -203,8 +203,8 @@ export default class Settings extends View {
   }
 
   addTemplate(cx, value = "") {
-    const id = "details-" + this.nextTemplate++;
-    this.detailTemplates.push({ id, input: this.input(value, cx, id) });
+    const id = "state-" + this.nextTemplate++;
+    this.stateTemplates.push({ id, input: this.input(value, cx, id) });
     cx.notify();
   }
 
@@ -271,8 +271,8 @@ export default class Settings extends View {
     if (this.loaded) {
       try {
         config = this.draft();
-        const selected = this.shuffleDetails ? this.detailTemplates.find(row => row.id === this.activeField) : null;
-        if (selected) config = { ...config, detailsTemplate: selected.input.value() };
+        const selected = this.shuffleState ? this.stateTemplates.find(row => row.id === this.activeField) : null;
+        if (selected) config = { ...config, stateTemplate: selected.input.value() };
         preview = buildActivity(this.previewData ?? { agents: agents(), spaces: spaces(), terminals: terminals(), panes: panes(), focus: this.focus }, { ...config, enabled: true }, this.branchFallback);
       } catch (e) { error = String(e); }
     }
@@ -303,24 +303,24 @@ export default class Settings extends View {
       .child(h_flex().gap(6).children(["name", "state", "details"].map((value, index) =>
         this.button(t, "display-" + value, ["App name", "State", "Details"][index], cx => { this.displayType = value; cx.notify(); }, this.displayType === value, busy).selected(this.displayType === value))))
       .child(this.field(t, "Details", this.inputs.detailsTemplate))
-      .child(this.toggle(t, "shuffle-details", "Shuffle Details templates", this.shuffleDetails, (value, cx) => { this.shuffleDetails = value; cx.notify(); }))
-      .child(this.note(t, "Shuffle picks from Details above and the alternatives below, without repeating the same template back-to-back. Off uses Details above."))
-      .child(this.field(t, "Change every (minutes, 1–1440)", this.inputs.detailsIntervalMinutes))
-      .children(this.detailTemplates.map((row, index) => h_flex().gap(6).items_end()
-        .child(div().flex_1().min_w(0).child(this.field(t, `Details alternative ${index + 1}`, row.input)))
+      .child(this.field(t, "State", this.inputs.stateTemplate))
+      .child(this.toggle(t, "shuffle-state", "Shuffle State templates", this.shuffleState, (value, cx) => { this.shuffleState = value; cx.notify(); }))
+      .child(this.note(t, "Shuffle picks from State above and the alternatives below, without repeating the same template back-to-back. Off uses State above."))
+      .child(this.field(t, "Change every (minutes, 1–1440)", this.inputs.stateIntervalMinutes))
+      .children(this.stateTemplates.map((row, index) => h_flex().gap(6).items_end()
+        .child(div().flex_1().min_w(0).child(this.field(t, `State alternative ${index + 1}`, row.input)))
         .child(this.button(t, "remove-" + row.id, "Remove", cx => {
-          this.detailTemplates = this.detailTemplates.filter(item => item !== row);
-          if (this.activeField === row.id) this.activeField = "detailsTemplate";
+          this.stateTemplates = this.stateTemplates.filter(item => item !== row);
+          if (this.activeField === row.id) this.activeField = "stateTemplate";
           row.input.release();
           cx.notify();
         }, false, busy))))
       .child(this.button(t, "add-template", "Add template", cx => this.addTemplate(cx), false, busy))
-      .child(this.note(t, "Focus a Details template to preview it while shuffle is on. Templates stay saved when shuffle is off."))
-      .child(this.field(t, "State", this.inputs.stateTemplate))
-      .child(this.note(t, `Insert into ${this.activeField === "stateTemplate" ? "State" : "Details"} (focus a template field to choose)`))
+      .child(this.note(t, "Focus a State template to preview it while shuffle is on. Templates stay saved when shuffle is off."))
+      .child(this.note(t, `Insert into ${this.activeField === "detailsTemplate" ? "Details" : "State"} (focus a template field to choose)`))
       .child(h_flex().flex_wrap().gap(6).children(Object.entries(VARIABLES).map(([key, label]) =>
         this.button(t, "variable-" + key, label, cx => {
-          const input = this.inputs[this.activeField] ?? this.detailTemplates.find(row => row.id === this.activeField)?.input;
+          const input = this.inputs[this.activeField] ?? this.stateTemplates.find(row => row.id === this.activeField)?.input;
           input.replace("{" + key + "}");
           input.focus();
           cx.notify();
@@ -330,11 +330,11 @@ export default class Settings extends View {
         .child(this.button(t, "reset", "Reset text", cx => {
           this.inputs.detailsTemplate.set_value(DEFAULT_DETAILS);
           this.inputs.stateTemplate.set_value(DEFAULT_STATE);
-          for (const row of this.detailTemplates) row.input.release();
-          this.detailTemplates = [];
+          for (const row of this.stateTemplates) row.input.release();
+          this.stateTemplates = [];
           this.activeField = "detailsTemplate";
-          this.shuffleDetails = false;
-          this.inputs.detailsIntervalMinutes.set_value("3");
+          this.shuffleState = false;
+          this.inputs.stateIntervalMinutes.set_value("3");
           cx.notify();
         }, false, busy)))
       .child(this.heading("Privacy"))
