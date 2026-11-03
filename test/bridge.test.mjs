@@ -133,7 +133,7 @@ test('handshakes, responds to PING, publishes only after ACK, and keeps READY pr
   await waitFor(() => f.pongs.length, 'PONG');
   assert.deepEqual(f.pongs[0], { check: 'pong' });
   const status = await f.status();
-  assert.deepEqual(status.activity, activity());
+  assert.deepEqual(status.activity, { ...activity(), timestamps: { start: f.bridge.startedAt } });
   assert.ok(status.lastAckAt);
   assert.equal(JSON.stringify(status).includes('must-not-be-recorded'), false);
 });
@@ -161,6 +161,32 @@ test('updates coalesce to the newest snapshot and unchanged activity does not re
   assert.ok(f.commands[1].receivedAt - f.commands[0].receivedAt >= 290);
   await delay(40);
   assert.equal(f.commands.length, 2);
+});
+
+test('elapsed time uses epoch milliseconds and survives activity changes, reconnects, and pause/resume', async (t) => {
+  const before = Date.now();
+  const f = await fixture(t, { publishMs: 10, staleMs: 5000 });
+  await waitFor(() => f.bridge.state === 'published');
+  const start = f.commands[0].args.activity.timestamps?.start;
+  assert.ok(Number.isSafeInteger(start));
+  assert.ok(start >= before && start <= Date.now(), 'Discord RPC start must use epoch milliseconds');
+
+  await delay(1100);
+  const changed = { ...activity('another workspace · another branch'), state: 'Codex · 0/3 agents active', status_display_type: 2 };
+  await f.snapshot(changed);
+  await waitFor(() => f.bridge.state === 'published' && f.bridge.activity?.details === changed.details);
+  assert.deepEqual(f.commands.at(-1).args.activity, { ...changed, timestamps: { start } });
+
+  for (const socket of f.sockets) socket.destroy();
+  await waitFor(() => f.handshakes.length >= 2 && f.bridge.state === 'published');
+  assert.equal(f.commands.at(-1).args.activity.timestamps.start, start);
+
+  await f.config({ clientId: CLIENT_ID, enabled: false });
+  await waitFor(() => f.bridge.state === 'paused' && f.bridge.activity === null);
+  assert.equal(f.commands.at(-1).args.activity, null);
+  await f.config({ clientId: CLIENT_ID, enabled: true });
+  await waitFor(() => f.bridge.state === 'published');
+  assert.equal(f.commands.at(-1).args.activity.timestamps.start, start);
 });
 
 test('forwards status display selection through SET_ACTIVITY and rejects invalid enums', async (t) => {

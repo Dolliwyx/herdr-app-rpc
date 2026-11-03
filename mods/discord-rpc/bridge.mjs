@@ -176,6 +176,7 @@ export class Bridge {
     this.lastAckAt = null;
     this.activity = null;
     this.lastFreshAt = Date.now();
+    this.startedAt = this.lastFreshAt;
     this.nextConnectAt = 0;
     this.nextPublishAt = 0;
     this.needsClear = false;
@@ -251,6 +252,7 @@ export class Bridge {
       }
       if (this.stopping) return;
       this.desired = failure || config.enabled === false ? null : snapshot.activity;
+      if (this.desired !== null) this.desired.timestamps = { start: this.startedAt };
       this.desiredState = failure ? 'error' : config.enabled === false ? 'paused' : this.desired === null ? 'idle' : 'pending';
       this.desiredError = failure ?? null;
       this.error = failure ?? (this.connection ? null : this.error);
