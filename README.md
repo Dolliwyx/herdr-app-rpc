@@ -19,7 +19,7 @@ Pi · 1/4 agents active
 
 `mods/discord-rpc/main.js` starts a presence host only when opened with `props: {"presenceHost":true}`. The host reads native Herdr spaces, terminals, agents, panes and focus, maps them through `presence.js`, and writes sanitized desired activity. A one-second timer coalesces changes and refreshes the heartbeat at least every ten seconds, including while the host is zero-width or its tab is inactive. Settings overlays, optional launchers and legacy no-props layout blocks do not host presence.
 
-`bridge.mjs` maintains Discord’s named-pipe connection and sends `SET_ACTIVITY`. It reconnects after Discord restarts and limits non-null updates to one every 15 seconds. Pausing clears without waiting for that throttle. Closing the host pane attempts to clear immediately. Closing Herdr ends the host; if its final clear cannot finish, the helper clears and exits after the last heartbeat expires (45 seconds, plus an in-flight clear timeout).
+`bridge.mjs` maintains Discord’s named-pipe connection and sends `SET_ACTIVITY`. It reconnects after Discord restarts and publishes changed activity at most once per second; unchanged activity is not resent. Pausing clears without waiting for that throttle. Closing the host pane attempts to clear immediately. Closing Herdr ends the host; if its final clear cannot finish, the helper clears and exits after the last heartbeat expires (45 seconds, plus an in-flight clear timeout).
 
 All mutable runtime files, including atomic temporary files, live in `<appHome>/data/discord-rpc/`, outside the watched `mods/` tree:
 

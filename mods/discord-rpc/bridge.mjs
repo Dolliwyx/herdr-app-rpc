@@ -169,7 +169,7 @@ export class Bridge {
   constructor(directory, options = {}) {
     this.directory = directory;
     this.runtimeDirectory = path.resolve(directory, '../../data/discord-rpc');
-    this.options = { pollMs: 1000, reconnectMs: 5000, publishMs: 15000, staleMs: 45000, futureMs: 5000, timeoutMs: 5000, ...options };
+    this.options = { pollMs: 1000, reconnectMs: 5000, publishMs: 1000, staleMs: 45000, futureMs: 5000, timeoutMs: 5000, ...options };
     this.paths = options.paths ?? Array.from({ length: 10 }, (_, n) => `\\\\.\\pipe\\discord-ipc-${n}`);
     this.state = 'starting';
     this.error = null;

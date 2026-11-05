@@ -151,6 +151,7 @@ test('pause clears immediately despite publish throttle and never repeats an ack
 
 test('updates coalesce to the newest snapshot and unchanged activity does not republish', async (t) => {
   const f = await fixture(t, { publishMs: 300 });
+  assert.equal(new Bridge(f.directory).options.publishMs, 1000);
   await waitFor(async () => (await f.status()).state === 'published');
   await f.snapshot(activity('intermediate'));
   await delay(35);
@@ -159,7 +160,8 @@ test('updates coalesce to the newest snapshot and unchanged activity does not re
   assert.ok(f.commands[1].args.activity, JSON.stringify({ commands: f.commands, status: await f.status() }));
   assert.equal(f.commands[1].args.activity.details, 'latest');
   assert.ok(f.commands[1].receivedAt - f.commands[0].receivedAt >= 290);
-  await delay(40);
+  await f.snapshot(activity('latest'));
+  await delay(350);
   assert.equal(f.commands.length, 2);
 });
 
