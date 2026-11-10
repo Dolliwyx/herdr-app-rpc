@@ -78,6 +78,15 @@ Both `detailsTemplate` and `stateTemplate` accept ordinary text and these variab
 | `{agents.running}` | Working live top-level reporting agents across all spaces |
 | `{agents.total}` | All live top-level reporting agents across all spaces |
 
+Count variables also support `{agents.total:singular:plural}` and `{agents.running:singular:plural}`. Exactly **1** selects the first form; every other count (including **0**) selects the second. Choose your own words or phrases:
+
+```text
+Shouting at {agents.total} {agents.total:agent:agents}
+Working with {agents.running} {agents.running:person:people}
+```
+
+These render as “Shouting at 1 agent” / “Shouting at 2 agents” and “Working with 1 person” / “Working with 0 people”. Both forms must contain non-whitespace text and cannot contain colons or braces. This syntax works in Details, State, and shuffled State alternatives; existing templates and defaults are unchanged.
+
 Privacy is applied **before** substitution, in either field. Raw paths and other terminal metadata are not available as variables. Empty variables remove adjacent template separators (such as ` · ` or ` | `), never punctuation inside variable values. Literal text is left as you entered it: do not type sensitive names directly into templates. Unknown variables and malformed braces are rejected. Templates allow up to 512 characters; rendered lines are sanitized and truncated to 128 Unicode codepoints. Blank templates omit that optional field; a one-character result is prefixed with `In ` for Discord's minimum text length. Omitted template settings retain the original format; Reset text restores it.
 
 Enable **Shuffle State templates** to randomly rotate between the main State template and any alternatives added with **Add template**. The interval defaults to **3 minutes** and accepts whole minutes from **1 to 1440**. Identical templates are deduplicated and the next selection never repeats the previous template when another is available (different templates may still render the same text). With one unique template, it stays unchanged. Details is not shuffled. Turning shuffle off restores the main State template without deleting alternatives.
