@@ -23,6 +23,49 @@ test("templates can move all supported variables between either activity field",
   assert.equal(activity.status_display_type, 2);
 });
 
+test("count expressions select custom singular and plural forms", () => {
+  for (const key of ["agents.total", "agents.running"]) {
+    for (const count of [0, 1, 2, 10]) {
+      const template = `Shouting at {${key}} {${key}:person:people}`;
+      assert.equal(renderTemplate(template, { [key]: count }), `Shouting at ${count} ${count === 1 ? "person" : "people"}`);
+    }
+  }
+  assert.equal(renderTemplate("{agents.total:one person:several people}", { "agents.total": 2 }), "several people");
+  assert.equal(renderTemplate("{agents.total:🐑\nfriend:🐑 friends}", { "agents.total": 1 }), "🐑 friend");
+  assert.equal(Array.from(renderTemplate(`{agents.total:${"🐑".repeat(200)}:many}`, { "agents.total": 1 })).length, 128);
+});
+
+test("count expressions work in both activity fields and shuffled configuration", () => {
+  const templates = {
+    ...config,
+    detailsTemplate: "Shouting at {agents.total} {agents.total:agent:agents}",
+    stateTemplate: "{agents.running} {agents.running:person:people} working",
+    stateTemplates: ["{agents.total:Just one:A crowd}"],
+  };
+  assert.deepEqual(parseConfig(JSON.stringify(templates)), templates);
+  const fixture = data();
+  assert.equal(buildActivity(fixture, templates).details, "Shouting at 1 agent");
+  assert.equal(buildActivity(fixture, templates).state, "1 person working");
+  fixture.terminals.push({ address: "t2", state: "live" });
+  fixture.agents.push({ address: "t2", space: "s1", app: "pi", status: "working" });
+  assert.equal(buildActivity(fixture, templates).details, "Shouting at 2 agents");
+  assert.equal(buildActivity(fixture, templates).state, "2 people working");
+});
+
+test("invalid plural expressions are rejected in every template setting", () => {
+  for (const template of [
+    "{agents.total:agent}", "{agents.total:agent:agents:extra}",
+    "{agents.total::agents}", "{agents.total:agent:}", "{agents.running: :people}",
+    "{workspace:person:people}", "{branch:branch:branches}", "{harness:tool:tools}",
+    "{unknown:one:many}", "{agents.total:{branch}:agents}", "{agents.total:agent:agents",
+  ]) {
+    assert.throws(() => renderTemplate(template, { "agents.total": 1 }));
+    for (const key of ["detailsTemplate", "stateTemplate", "stateTemplates"]) {
+      assert.throws(() => parseConfig(JSON.stringify({ ...config, [key]: key === "stateTemplates" ? [template] : template })));
+    }
+  }
+});
+
 test("private workspaces and borrowed private terminals stay private in every template", () => {
   for (const borrowed of [false, true]) {
     const fixture = data();

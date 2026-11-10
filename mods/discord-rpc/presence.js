@@ -26,8 +26,11 @@ export const VARIABLES = {
 export function validateTemplate(template) {
   if (typeof template !== "string" || template.length > 512)
     throw new Error("Presence templates must be text, up to 512 characters");
-  const remainder = template.replace(/\{([^{}]+)\}/g, (_match, key) => {
+  const remainder = template.replace(/\{([^{}]+)\}/g, (_match, expression) => {
+    const [key, ...forms] = expression.split(":");
     if (!Object.hasOwn(VARIABLES, key)) throw new Error(`Unknown variable: {${key}}`);
+    if (forms.length && (!["agents.running", "agents.total"].includes(key) || forms.length !== 2 || forms.some(form => !form.trim())))
+      throw new Error("Use {agents.total:singular:plural} or {agents.running:singular:plural} with two nonempty forms");
     return "";
   });
   if (/[{}]/.test(remainder)) throw new Error("Use complete variables, for example {workspace}");
@@ -35,14 +38,18 @@ export function validateTemplate(template) {
 
 export function renderTemplate(template, values) {
   validateTemplate(template);
-  const parts = template.split(/(\{[^{}]+\})/g);
+  const parts = template.split(/(\{[^{}]+\})/g).map((part, i) => {
+    if (i % 2 === 0) return part;
+    const [key, singular, plural] = part.slice(1, -1).split(":");
+    return singular === undefined ? values[key] ?? "" : values[key] === 1 ? singular : plural;
+  });
   for (let i = 1; i < parts.length; i += 2) {
-    if (String(values[parts[i].slice(1, -1)] ?? "")) continue;
+    if (String(parts[i])) continue;
     // Remove only template punctuation, never punctuation inside a variable's value.
     if (/[·|,:;/–—-]\s*$/.test(parts[i - 1])) parts[i - 1] = parts[i - 1].replace(/[\s·|,:;/–—-]+$/, "");
     else parts[i + 1] = parts[i + 1].replace(/^[\s·|,:;/–—-]+/, "");
   }
-  return text(parts.map((part, i) => i % 2 ? values[part.slice(1, -1)] ?? "" : part).join(""));
+  return text(parts.join(""));
 }
 
 export function parseConfig(source) {
