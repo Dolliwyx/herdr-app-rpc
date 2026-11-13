@@ -1,5 +1,7 @@
 # Herdr Discord presence
 
+![Herdr Discord RPC banner with a Discord mascot riding a ram](banner.png)
+
 Show your Herdr workspace, Git branch, and agent activity on Discord.
 
 ```text
