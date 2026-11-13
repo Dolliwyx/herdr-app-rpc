@@ -1,6 +1,6 @@
 # Herdr Discord presence
 
-A tab-owned Herdr mod plus a dependency-free Windows Discord helper. Show the RPC pane once to start presence, then optionally resize it to zero width so it takes no visible space. The loaded pane stays alive across tab and layout switches. No Windows login task or startup launcher is used.
+Show your Herdr workspace, Git branch, and agent activity on Discord.
 
 ```text
 Herdr
@@ -8,138 +8,146 @@ herdr-app-rpc · main
 Pi · 1/4 agents active
 ```
 
-- Counts **all Herdr spaces**, including connected machines, but **only live top-level reporting agents**. Sub-agents and ordinary shells do not count. Active means `working`; blocked, done, and idle still count toward total.
-- Workspace follows the selected Herdr space. Branch follows the focused or borrowed terminal through Herdr’s native API. Missing branch metadata uses a Git lookup on that terminal’s machine, cached for ten seconds per unchanged context. Non-Git terminals omit the branch.
-- Harness follows the focused reporting agent. With a shell/mod focused, it uses the workspace's top-level harnesses (for example, `Pi + Codex`). No model detection or terminal scraping.
-- Matching `privatePatterns` replace the workspace with `Private workspace` and omit the branch, including a borrowed terminal’s private owner space. Counts and harness remain visible. Patterns are case-insensitive whole-name globs supporting `*` and `?`.
-- **Startup limitation:** an inactive restored mod pane does not initialize until its tab is shown. Keep the host pane in your startup-active tab, or visit it once after opening Herdr. Once loaded, it keeps running when its tab is inactive or another layout is selected.
-- Publishes no terminal titles, prompts, command lines, raw working-directory paths, or machine names. Workspace and branch names are public on Discord.
+Presence runs while an RPC pane is open in Herdr. You can collapse the pane to zero width and keep using your other tabs and layouts. No Windows startup task, Discord token, or npm packages are needed.
 
-## Files
+## Install and start sharing
 
-`mods/discord-rpc/main.js` starts a presence host only when opened with `props: {"presenceHost":true}`. The host reads native Herdr spaces, terminals, agents, panes and focus, maps them through `presence.js`, and writes sanitized desired activity. A one-second timer coalesces changes and refreshes the heartbeat at least every ten seconds, including while the host is zero-width or its tab is inactive. Settings overlays, optional launchers and legacy no-props layout blocks do not host presence.
+You need Windows, Node.js 20 or later, PowerShell 7 (`pwsh`), a running Herdr app, and desktop Discord with activity sharing enabled. Run the helper as the same Windows desktop user as Discord. macOS and Linux are not supported yet.
 
-`bridge.mjs` maintains Discord’s named-pipe connection and sends `SET_ACTIVITY`. It reconnects after Discord restarts and publishes changed activity at most once per second; unchanged activity is not resent. Pausing clears without waiting for that throttle. Closing the host pane attempts to clear immediately. Closing Herdr ends the host; if its final clear cannot finish, the helper clears and exits after the last heartbeat expires (45 seconds, plus an in-flight clear timeout).
+Workspace and branch names are public on Discord. If you need to hide them, [set privacy patterns](#hide-private-workspaces) before creating the RPC pane.
 
-All mutable runtime files, including atomic temporary files, live in `<appHome>/data/discord-rpc/`, outside the watched `mods/` tree:
+1. From the repository root in Windows PowerShell, install the mod:
 
-- `.presence.json`: sanitized desired activity and heartbeat.
-- `.status.json`: helper PID, connection/error state, and last acknowledged activity. `published` means Discord acknowledged `SET_ACTIVITY`, not that its profile UI was visually inspected.
+   ```powershell
+   pwsh -NoProfile -ExecutionPolicy Bypass -File ./scripts/install-windows.ps1
+   ```
 
-Source and local `config.json` remain in `<appHome>/mods/discord-rpc/`. No npm packages, bot token, user token, web server, OS login service or Scheduler task are needed. The activity explicitly displays **Herdr**; the application ID selects the Discord application, whose artwork keys must match the configuration.
+   The installer preserves your existing configuration. It does not create a pane or change Windows startup settings.
 
-## Configuration
+2. Check the installed mod:
 
-The installer creates the installed mod’s `config.json` from `config.example.json` only when absent; existing configuration is preserved. It uses the shared Herdr Discord application. Local config and runtime state are ignored by Git.
+   ```powershell
+   herdr-app check "$HOME/.config/herdr-app/mods/discord-rpc"
+   ```
 
-> **Application ID:** Leave `clientId` unchanged unless you know what you're doing and want to use your own Discord application. If you change it, that application's image assets must match this configuration. The application ID is public—not a secret or a token.
+3. Create an RPC pane beside the focused pane:
 
-```json
-{
-  "clientId": "1529832902387302510",
-  "enabled": true,
-  "privatePatterns": ["client-*", "Personal"],
-  "largeImageKey": "herdr",
-  "showHarnessIcon": true,
-  "detailsTemplate": "{workspace} · {branch}",
-  "stateTemplates": [],
-  "shuffleState": false,
-  "stateIntervalMinutes": 3,
-  "stateTemplate": "{harness} · {agents.running}/{agents.total} agents active",
-  "statusDisplayType": "name"
-}
-```
+   ```powershell
+   herdr-app do pane.split '{"direction":"right","mod":"discord-rpc","props":{"presenceHost":true}}'
+   ```
 
-### Settings screen
+   Keep only one RPC host pane per Herdr app home, including across windows. The command leaves your existing terminals in place.
 
-Press **Ctrl+Alt+D** after merging the bundled `keys.json` entry into your Herdr app home's `keys.json` under `global`. Preserve existing bindings; choose another key if it is already assigned or conflicts with AltGr typing on your keyboard. Herdr reloads bindings live. The shortcut opens settings in any layout; it does not start presence.
+4. Once the RPC pane has loaded, click **Collapse to 0px** to reclaim the space.
 
-If your layout includes the optional launcher, click its **Discord logo** (tooltip: “Discord presence”). You can always open the native configuration dialog with:
+5. Open your Discord profile and check the activity.
+
+If you use a custom Herdr app home, pass `-AppHome <path>` to the installer or set `HERDR_APP_HOME`. Use the same app home for the Herdr commands.
+
+### Start presence after reopening Herdr
+
+Show the tab that contains the RPC pane once after each Herdr launch. An inactive restored tab does not start presence until you visit it. Keep the pane in your startup-active tab to avoid this extra step.
+
+After the pane loads, presence keeps updating across tab and layout changes. Keep the pane open while sharing. Use **Collapse to 0px**, not `layout.hide` or `hidden: true`. A hidden pane cannot initialize until you show it again.
+
+## Change your settings
+
+Open the settings dialog:
 
 ```powershell
 herdr-app do mod.open --name discord-rpc
 ```
 
-Use **Create RPC pane** in settings to restore a removed host as a zero-width pane beside the currently focused pane. If an RPC pane already exists, **Go to RPC pane** selects it instead of creating a duplicate. This action does not save or discard your settings draft.
+To add a keyboard shortcut, merge the entry from [`keys.json`](keys.json) into the `global` section of your Herdr app home's `keys.json`. Preserve your existing bindings. The bundled shortcut is **Ctrl+Alt+D**. Choose another binding if it is already assigned or conflicts with AltGr. Herdr reloads bindings without a restart.
 
-The dialog is separate from the host pane: opening or closing settings does not start another helper or clear presence. **Save** applies your draft together; **Cancel** discards it. Turning sharing **off pauses immediately**, even if you later cancel. Turning it back on requires Save. Reload discards draft edits and rereads the file. Saves are atomic and refuse to overwrite a configuration changed elsewhere; Reload after a conflict. Missing configuration starts with the shared application defaults; malformed configuration must be fixed in the file before editing.
+Use **Save** to apply your changes or **Cancel** to discard them. Turning sharing off pauses presence immediately, even if you later cancel. To resume sharing, turn it on and save.
 
-The preview shows draft text for the current workspace, including privacy changes, independently of whether sharing is paused. Connection status and the last Discord acknowledgment are labeled separately. Artwork uses the local Herdr image as a reference for the shared application's default `herdr` key; asset-key labels identify the configured images, not a fetched Discord rendering.
+If another editor changes the configuration while the dialog is open, reload before saving. Reload discards your draft. If the file contains invalid configuration, fix the file before editing in the dialog.
 
-### Presence templates
+Opening or closing settings does not start or stop presence. If you removed the host pane, click **Create RPC pane** to restore it at zero width. If the pane already exists, click **Go to RPC pane** to select it.
 
-Both `detailsTemplate` and `stateTemplate` accept ordinary text and these variables. Focus either field, then use a variable button to insert at the cursor or replace the selection.
+### Hide private workspaces
 
-| Variable | Value |
-| --- | --- |
-| `{workspace}` | Selected workspace name, or `Private workspace` |
-| `{branch}` | Focused terminal's branch; empty for non-Git or private workspaces |
-| `{harness}` | Focused agent's harness, or the workspace's top-level harnesses |
-| `{agents.running}` | Working live top-level reporting agents across all spaces |
-| `{agents.total}` | All live top-level reporting agents across all spaces |
+In settings, add workspace-name patterns to `privatePatterns`, then save. For example, use `client-*` to hide names that start with `client-`, or `Personal` to hide that workspace.
 
-Count variables also support `{agents.total:singular:plural}` and `{agents.running:singular:plural}`. Exactly **1** selects the first form; every other count (including **0**) selects the second. Choose your own words or phrases:
+Patterns match the whole name, ignore case, and support `*` for any number of characters and `?` for one character. A match replaces the workspace name with `Private workspace` and removes the branch. The same protection applies when a borrowed terminal belongs to a private workspace.
+
+Agent counts and harness names remain visible. The mod does not publish terminal titles, prompts, commands, raw directory paths, or machine names.
+
+Do not put sensitive names directly into templates. Privacy patterns filter workspace and branch values, not text you type yourself.
+
+### Customize the activity text
+
+Edit **Details** and **State** in settings. Focus a field, then click a variable button to insert a value at the cursor.
+
+Use `{workspace}` for the selected workspace and `{branch}` for the focused terminal's Git branch. Non-Git terminals and private workspaces omit the branch.
+
+Use `{harness}` for the focused agent's harness, such as Pi or Codex. When a shell or mod has focus, the value lists the workspace's top-level harnesses, such as `Pi + Codex`.
+
+Use `{agents.running}` and `{agents.total}` for agent counts across all Herdr spaces, including connected machines. Only live top-level reporting agents count. Working agents count as active. Blocked, done, and idle agents count toward the total. Sub-agents and ordinary shells do not count.
+
+For singular and plural text, put both forms after a count variable:
 
 ```text
-Shouting at {agents.total} {agents.total:agent:agents}
 Working with {agents.running} {agents.running:person:people}
 ```
 
-These render as “Shouting at 1 agent” / “Shouting at 2 agents” and “Working with 1 person” / “Working with 0 people”. Both forms must contain non-whitespace text and cannot contain colons or braces. This syntax works in Details, State, and shuffled State alternatives; existing templates and defaults are unchanged.
+This renders as `Working with 1 person` or `Working with 0 people`. Both forms need nonblank text and cannot contain colons or braces.
 
-Privacy is applied **before** substitution, in either field. Raw paths and other terminal metadata are not available as variables. Empty variables remove adjacent template separators (such as ` · ` or ` | `), never punctuation inside variable values. Literal text is left as you entered it: do not type sensitive names directly into templates. Unknown variables and malformed braces are rejected. Templates allow up to 512 characters; rendered lines are sanitized and truncated to 128 Unicode codepoints. Blank templates omit that optional field; a one-character result is prefixed with `In ` for Discord's minimum text length. Omitted template settings retain the original format; Reset text restores it.
+Leave a template blank to omit that line. Empty variables also remove adjacent separators, so a missing branch does not leave a trailing ` · `. Keep templates within 512 characters. Discord text is limited to 128 Unicode codepoints after rendering. Use **Reset text** to restore the defaults.
 
-Enable **Shuffle State templates** to randomly rotate between the main State template and any alternatives added with **Add template**. The interval defaults to **3 minutes** and accepts whole minutes from **1 to 1440**. Identical templates are deduplicated and the next selection never repeats the previous template when another is available (different templates may still render the same text). With one unique template, it stays unchanged. Details is not shuffled. Turning shuffle off restores the main State template without deleting alternatives.
+To rotate State text, enable **Shuffle State templates** and use **Add template** for alternatives. Set an interval from 1 to 1440 whole minutes. The default is 3 minutes. Details does not rotate. Turning shuffle off restores the main State template and keeps your alternatives.
 
-These settings persist as `shuffleState`, `stateTemplates` (the alternatives), and `stateIntervalMinutes`. Old configurations remain unchanged until saved, with shuffle off by default. Each alternative supports the same variables, validation and privacy rules; blank templates can omit State. While shuffle is enabled, focus an alternative to preview it and target variable insertion. Save applies the list, toggle and interval together; Reset text clears alternatives and turns shuffle off. Selection restarts when shuffle settings change, sharing resumes or the host restarts. Rotation runs on the existing host heartbeat (up to ten seconds after the interval), subject to the helper’s normal publication throttle.
+Choose **App name**, **State**, or **Details** for Discord's member-list text. An empty selected line falls back to `Herdr`.
 
-`statusDisplayType` selects the text shown in Discord's member list: `name` (Herdr, the default), `state`, or `details`. The expanded activity retains both text lines. If the selected template renders empty, the member-list display falls back to the app name.
+### Change artwork or use your own Discord application
 
-Set `enabled` to `false` to pause. Invalid configuration fails closed. Omit `largeImageKey` for text-only presence. Uploaded small-image keys supported by this version include `pi`, `claude`, `codex`, `gemini`, `opencode`, `cursor`, and `copilot`.
+Keep the default `clientId` to use the shared Herdr Discord application. The ID is public, not a token.
 
-The installer preserves this mod’s existing `config.json`; it does not import or stop other presence integrations. Two integrations using the same Discord application may compete; pause the old one if it overwrites this presence.
+If you use your own application, set its ID and upload artwork that matches your configured image keys. Omit `largeImageKey` for text-only presence. Supported harness icon keys include `pi`, `claude`, `codex`, `gemini`, `opencode`, `cursor`, and `copilot`.
 
-## Install
+For file-based configuration, edit `<appHome>/mods/discord-rpc/config.json`. See [`config.example.json`](mods/discord-rpc/config.example.json) for the defaults. The installer creates this file only when it is missing.
 
-Requires Windows Node.js 20+, PowerShell 7 (`pwsh`), a running Herdr app, and desktop Discord with activity sharing enabled. The helper runs as the normal Windows desktop user in Discord’s session. macOS/Linux support is deferred; see [BACKLOG.md](BACKLOG.md).
+## Check a missing or stale activity
 
-From the repository root in Windows PowerShell:
+1. Confirm that desktop Discord is running and activity sharing is enabled.
+2. Show the RPC pane's tab and check that sharing is on in settings.
+3. Run `herdr-app status` to check for mod errors.
+4. Inspect `<appHome>/data/discord-rpc/.status.json` for the helper's connection state, errors, and last acknowledged activity.
+5. Compare `<appHome>/data/discord-rpc/.presence.json` with the activity you expect.
+6. Check your Discord profile. The settings preview shows your draft, not proof of publication. A `published` status means Discord acknowledged the activity, not that the profile UI has been checked.
 
-```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File ./scripts/install-windows.ps1
-herdr-app check "$HOME/.config/herdr-app/mods/discord-rpc"
-herdr-app do pane.split '{"direction":"right","mod":"discord-rpc","props":{"presenceHost":true}}'
-herdr-app status
-```
+If another presence integration uses the same Discord application, pause it to prevent competing updates. The installer does not stop other integrations. The helper reconnects when Discord restarts.
 
-The installer only copies mod/helper files, preserves existing `config.json`, and creates defaults if missing. It does not create a pane, login task, or startup launcher. Use `-AppHome <path>` to target a nondefault app home (it also respects `HERDR_APP_HOME`); target the same app home when running Herdr commands.
+To check cleanup, close the RPC host pane. Presence normally clears immediately. If cleanup cannot finish, the helper clears and exits after its last heartbeat expires, about 45 seconds plus any in-flight clear timeout.
 
-The `pane.split` command adds a host beside the focused pane in the current tab without replacing its terminals. **Create only one host pane per app home.** Multiple host panes/windows writing the same snapshot are unsupported. No layout definitions need editing. Settings and its optional global shortcut/launcher are separate from the host.
+## Upgrade an existing installation
 
-For an invisible host, press **Collapse to 0px** on the RPC pane after it has initialized. Use the same button if you accidentally expand it again; presence keeps running. Alternatively, resize it with its pane ID, not the original terminal’s ID:
+1. Close the old RPC host pane.
+2. Wait for the helper to clear and exit. Allow at least 45 seconds after the last heartbeat, plus any in-flight clear timeout.
+3. Rerun the installer.
+4. Create a new RPC host pane with the install command above.
 
-```powershell
-herdr-app do layout.resize '{"id":"<RPC_PANE_ID>","px":0}'
-```
+Your configuration stays intact. Opening settings alone does not reload a running helper's code.
 
-Keep the pane present and **do not use `layout.hide` or set `hidden: true`**. Zero width still leaves it in Herdr’s visible-pane scan, so it can initialize when its tab is selected after a restart; a hidden pane is excluded from that scan. Resize it wider temporarily if you want its host controls, or use the settings shortcut.
+If you used the earlier standalone service, verify that its `Herdr Discord RPC` Scheduler task belongs to that installation. Stop and remove that task, then confirm that its service process has exited before creating a host pane. Leave unrelated tasks and processes alone. The installer does not migrate or remove them.
 
-The host belongs to its tab, so it stays alive across tab and layout switches after initialization. Do not close its pane while sharing. On the next Herdr start, it initializes only if its tab is shown; an inactive saved pane is not an app-wide startup hook.
+## Remove the mod
 
-### Upgrade or migrate
+1. Close the RPC host pane and wait for the helper to clear and exit.
+2. Delete `<appHome>/mods/discord-rpc/` and `<appHome>/data/discord-rpc/`.
+3. Remove the optional shortcut or launcher if you added one.
 
-Rerun the installer without replacing local configuration. A running Node helper retains its loaded JavaScript: close the old host and let its heartbeat lease expire (45 seconds plus an in-flight clear timeout), install the files, then add the new host pane. Opening settings alone does not upgrade a running helper.
+Leave Herdr's shipped layouts and your other terminal panes unchanged.
 
-If migrating from the earlier standalone service, stop and remove its **verified owned** `Herdr Discord RPC` Scheduler task before starting the pane host, and ensure its service process has exited. The file-copy installer deliberately does not inspect or modify Scheduler tasks or unrelated startup mechanisms. Do not leave the old collector running beside a pane host. Legacy no-props layout blocks remain inert and can be removed from personal layouts; do not modify shipped layouts.
+## Run the tests
 
-### Remove
-
-Close the RPC host pane, then let the helper clear and exit before removing the installed mod and runtime directory. Remove an optional shortcut/launcher only if you installed it. Do not remove Herdr’s shipped layouts or other terminal panes.
-
-## Verify
+From the repository root, run:
 
 ```sh
 npm test
 ```
 
-Run tests with Windows Node as well. Check `herdr-app check` and `herdr-app status` for mod errors. Inspect `<appHome>/data/discord-rpc/.status.json` for acknowledged activity and `.presence.json` for sanitized desired activity. Verify workspace/pane changes, agent-status counts, privacy, pause/resume, and that switching tabs/layouts leaves updates running. Close the host pane to verify clearing. On reopening Herdr, show the host’s saved tab to start it; do not claim automatic startup from an inactive pane. A named-pipe connection or settings preview alone is not an end-to-end publication check; inspect Discord separately before claiming its profile UI was verified.
+For Windows changes, run the tests with Windows Node.js too. Check the installed mod with `herdr-app check`, then test workspace changes, agent counts, privacy, pause, and resume in Herdr. Switch tabs and layouts to confirm that updates continue. Inspect Discord separately to confirm the visible result.
+
+See [RECIPE.md](RECIPE.md) for implementation details and [BACKLOG.md](BACKLOG.md) for planned work.
